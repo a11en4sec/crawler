@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"github.com/antchfx/htmlquery"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
@@ -15,7 +17,7 @@ import (
 //var headerRe = regexp.MustCompile(`<div class="news_li"[\s\S]*?<h2>[\s\S]*?<a.*?target="_blank">([\s\S]*?)</a>`)
 var headerRe = regexp.MustCompile(`<div class="small_cardcontent__BTALp"[\s\S]*?<h2>([\s\S]*?)</h2>`)
 
-func main() {
+func main1() {
 	url := "https://www.thepaper.cn/"
 
 	body, err := Fetch(url)
@@ -67,4 +69,24 @@ func DeterminEncoding(r *bufio.Reader) encoding.Encoding {
 	e, _, _ := charset.DetermineEncoding(bytes, "")
 
 	return e
+}
+
+// tag v0.0.6
+func main() {
+	url := "https://www.thepaper.cn/"
+	body, err := Fetch(url)
+
+	if err != nil {
+		fmt.Printf("read content failed:%v", err)
+		return
+	}
+	doc, err := htmlquery.Parse(bytes.NewReader(body))
+	if err != nil {
+		fmt.Printf("htmlquery.Parse failed:%v", err)
+	}
+	nodes := htmlquery.Find(doc, `//div[@class="small_cardcontent__BTALp"]/div/a[@target="_blank"]/h2`)
+
+	for _, node := range nodes {
+		fmt.Println("fetch card ", node.FirstChild.Data)
+	}
 }
