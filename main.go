@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/antchfx/htmlquery"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
@@ -72,7 +73,7 @@ func DeterminEncoding(r *bufio.Reader) encoding.Encoding {
 }
 
 // tag v0.0.6
-func main() {
+func main2() {
 	url := "https://www.thepaper.cn/"
 	body, err := Fetch(url)
 
@@ -89,4 +90,27 @@ func main() {
 	for _, node := range nodes {
 		fmt.Println("fetch card ", node.FirstChild.Data)
 	}
+}
+
+// tag v0.0.9
+func main() {
+	url := "https://www.thepaper.cn/"
+	body, err := Fetch(url)
+
+	if err != nil {
+		fmt.Printf("read content failed:%v", err)
+		return
+	}
+
+	// 加载HTML文档
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
+	if err != nil {
+		fmt.Printf("read content failed:%v", err)
+	}
+
+	doc.Find("div.small_cardcontent__BTALp div a[target=_blank] h2").Each(func(i int, s *goquery.Selection) {
+		// 获取匹配标签中的文本
+		title := s.Text()
+		fmt.Printf("Review %d: %s\n", i, title)
+	})
 }
