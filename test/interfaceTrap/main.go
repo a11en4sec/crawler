@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type Binary struct {
 	uint64
 }
@@ -12,7 +14,7 @@ func (i Binary) String() string {
 }
 func main() {
 	a := Binary{54}
-	// todo 假如实现接口的结构体的接受对象
+	// 实现接口的结构体:Binary接受对象
 	b := Stringer(a)
-	b.String()
+	fmt.Printf("b.String:%s \n", b.String())
 }
