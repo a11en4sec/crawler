@@ -14,14 +14,14 @@ import (
 )
 
 type Fetcher interface {
-	Get(url string) ([]byte, error)
+	Get(url *Request) ([]byte, error)
 }
 
 type BaseFetch struct {
 }
 
-func (BaseFetch) Get(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+func (BaseFetch) Get(req *Request) ([]byte, error) {
+	resp, err := http.Get(req.Url)
 
 	if err != nil {
 		fmt.Println(err)
@@ -32,6 +32,7 @@ func (BaseFetch) Get(url string) ([]byte, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("Error status code:%d", resp.StatusCode)
+		return nil, err
 	}
 	bodyReader := bufio.NewReader(resp.Body)
 	e := DeterminEncoding(bodyReader)
@@ -45,7 +46,7 @@ type BrowserFetch struct {
 }
 
 // Get 模拟浏览器访问
-func (b BrowserFetch) Get(url string) ([]byte, error) {
+func (b BrowserFetch) Get(r *Request) ([]byte, error) {
 	client := &http.Client{
 		Timeout: b.Timeout,
 	}
@@ -56,12 +57,13 @@ func (b BrowserFetch) Get(url string) ([]byte, error) {
 		client.Transport = transport
 	}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", r.Url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("get url failed:%v", err)
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
+	//req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36")
 
 	resp, err := client.Do(req)
 	if err != nil {
