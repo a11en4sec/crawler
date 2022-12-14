@@ -1,9 +1,12 @@
 package collect
 
+import "time"
+
 type Request struct {
 	Url       string
 	Cookie    string
 	ParseFunc func([]byte, *Request) ParseResult
+	WaitTime  time.Duration
 }
 
 type ParseResult struct {

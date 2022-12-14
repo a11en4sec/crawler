@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/a11en4sec/crawler/proxy"
+	"go.uber.org/zap"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
@@ -43,6 +44,7 @@ func (BaseFetch) Get(req *Request) ([]byte, error) {
 type BrowserFetch struct {
 	Timeout time.Duration
 	Proxy   proxy.ProxyFunc
+	Logger  *zap.Logger
 }
 
 // Get 模拟浏览器访问

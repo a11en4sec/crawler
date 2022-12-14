@@ -1,3 +1,6 @@
+// 可以代理http和https请求,中间不拆包
+// [client]<--->(clientConn)[Proxy](destConn)<----->[server]
+// 数据在客户端和服务端之间来回拷贝
 package main
 
 import (
@@ -13,6 +16,9 @@ func main() {
 	server := &http.Server{
 		Addr: ":8889",
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// 在 HTTP 隧道技术中，客户端会在第一次连接代理服务器时给代理服务器发送一个指令，通常是一个 HTTP 请求。
+			// 这里我们可以将 HTTP 请求头中的 method 设置为 CONNECT
+			// 代理服务器收到该指令后，将与目标服务器建立 TCP 连接
 			if r.Method == http.MethodConnect {
 				handleTunneling(w, r)
 			} else {
@@ -54,6 +60,7 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	}
 
+	// [client]<--->(clientConn)[Proxy](destConn)<----->[server]
 	// 数据在客户端和服务端之间来回拷贝
 	go transfer(destConn, clientConn)
 	go transfer(clientConn, destConn)

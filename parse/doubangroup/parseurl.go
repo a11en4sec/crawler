@@ -1,6 +1,7 @@
 package doubangroup
 
 import (
+	"fmt"
 	"github.com/a11en4sec/crawler/collect"
 	"regexp"
 )
@@ -15,6 +16,7 @@ func ParseURL(contents []byte, req *collect.Request) collect.ParseResult {
 
 	for _, m := range matches {
 		u := string(m[1])
+		fmt.Println("[+++]", u)
 		result.Requesrts = append(
 			result.Requesrts, &collect.Request{
 				Url:    u,
