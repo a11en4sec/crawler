@@ -2,6 +2,7 @@ package collect
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/a11en4sec/crawler/proxy"
 	"go.uber.org/zap"
@@ -9,8 +10,10 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -35,6 +38,7 @@ func (BaseFetch) Get(req *Request) ([]byte, error) {
 		fmt.Printf("Error status code:%d", resp.StatusCode)
 		return nil, err
 	}
+
 	bodyReader := bufio.NewReader(resp.Body)
 	e := DeterminEncoding(bodyReader)
 	utf8Reader := transform.NewReader(bodyReader, e.NewDecoder())
@@ -72,6 +76,11 @@ func (b BrowserFetch) Get(r *Request) ([]byte, error) {
 		return nil, err
 	}
 
+	//bodyRes, _ := ioutil.ReadAll(resp.Body)
+	//resbody := ioutil.NopCloser(bytes.NewReader(bodyRes))
+	// 检测是否触发反爬
+	//checkAntiCrawler(rr)
+
 	bodyReader := bufio.NewReader(resp.Body)
 	e := DeterminEncoding(bodyReader)
 	utf8Reader := transform.NewReader(bodyReader, e.NewDecoder())
@@ -89,4 +98,16 @@ func DeterminEncoding(r *bufio.Reader) encoding.Encoding {
 
 	e, _, _ := charset.DetermineEncoding(bytes, "")
 	return e
+}
+
+func checkAntiCrawler(closer io.ReadCloser) {
+	// 检测是否被反扒拒绝--------
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(closer)
+	respStr := buf.String()
+	if strings.Contains(respStr, "有异常请求从你的") {
+		fmt.Println("[---]:", "触发反爬")
+	}
+	// ----------------------
+
 }

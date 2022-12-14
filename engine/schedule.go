@@ -8,11 +8,8 @@ import (
 type ScheduleEngine struct {
 	requestCh chan *collect.Request
 	workerCh  chan *collect.Request
-	WorkCount int
-	Fetcher   collect.Fetcher
-	Logger    *zap.Logger
 	out       chan collect.ParseResult
-	Seeds     []*collect.Request
+	options
 }
 
 func (s *ScheduleEngine) Run() {
@@ -38,7 +35,8 @@ func (s *ScheduleEngine) Schedule() {
 	go func() {
 		for {
 			var req *collect.Request
-			var ch chan *collect.Request
+			//var ch chan *collect.Request
+			ch := make(chan *collect.Request)
 
 			if len(reqQueue) > 0 {
 				req = reqQueue[0]
@@ -53,6 +51,20 @@ func (s *ScheduleEngine) Schedule() {
 			}
 		}
 	}()
+}
+
+func NewSchedule(opts ...Option) *ScheduleEngine {
+	options := defaultOptions
+
+	// 选项模式，根据需要丰富defaultOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	s := &ScheduleEngine{}
+
+	s.options = options
+
+	return s
 }
 
 func (s *ScheduleEngine) CreateWork() {
