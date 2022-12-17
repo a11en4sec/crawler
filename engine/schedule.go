@@ -70,12 +70,18 @@ func NewSchedule(opts ...Option) *ScheduleEngine {
 func (s *ScheduleEngine) CreateWork() {
 	for {
 		r := <-s.workerCh
+		// 判断r是否超过爬取的最高深度
+		if err := r.Check(); err != nil {
+			s.Logger.Error("check failed", zap.Error(err))
+			continue
+		}
 		body, err := s.Fetcher.Get(r)
 		//fmt.Println("[++]", string(body))
 		if err != nil {
 			s.Logger.Error("can not fetch ", zap.Error(err))
 			continue
 		}
+		// todo: 错误的r，需要重新爬取
 		result := r.ParseFunc(body, r)
 		s.out <- result
 	}
