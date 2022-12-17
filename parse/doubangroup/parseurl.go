@@ -24,8 +24,7 @@ const urlListRe = `(https://www.douban.com/group/topic/[0-9a-z]+/)"[^>]*>([^<]+)
 func ParseURL(contents []byte, req *collect.Request) collect.ParseResult {
 
 	// 是否触发反爬
-	checkAntiCrawler(contents)
-
+	//checkAntiCrawler(contents)
 	//fmt.Println("[body]:", string(contents))
 	re := regexp.MustCompile(urlListRe)
 
@@ -39,10 +38,9 @@ func ParseURL(contents []byte, req *collect.Request) collect.ParseResult {
 		//fmt.Printf("[+ fetchUrlCount:%d] %s\n]", fetchUrlCount, u)
 		result.Requesrts = append(
 			result.Requesrts, &collect.Request{
-				Url:      u,
-				WaitTime: req.WaitTime,
-				Cookie:   req.Cookie,
-				Depth:    req.Depth + 1,
+				Task:  req.Task,
+				Url:   u,
+				Depth: req.Depth + 1,
 				ParseFunc: func(c []byte, request *collect.Request) collect.ParseResult {
 					return GetContent(c, u)
 				},

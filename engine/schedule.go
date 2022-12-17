@@ -5,14 +5,25 @@ import (
 	"go.uber.org/zap"
 )
 
-type ScheduleEngine struct {
+type Schedule struct {
 	requestCh chan *collect.Request
 	workerCh  chan *collect.Request
 	out       chan collect.ParseResult
 	options
 }
 
-func (s *ScheduleEngine) Run() {
+func NewSchedule(opts ...Option) *Schedule {
+	options := defaultOptions
+	// 选项模式，根据需要丰富defaultOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	s := &Schedule{}
+	s.options = options
+	return s
+}
+
+func (s *Schedule) Run() {
 	requestCh := make(chan *collect.Request)
 	workerCh := make(chan *collect.Request)
 	out := make(chan collect.ParseResult)
@@ -30,13 +41,20 @@ func (s *ScheduleEngine) Run() {
 	s.HandleResult()
 }
 
-func (s *ScheduleEngine) Schedule() {
-	var reqQueue = s.Seeds
+func (s *Schedule) Schedule() {
+	var reqQueue []*collect.Request
+	for _, seedTask := range s.Seeds {
+		seedTask.RootReq.Task = seedTask
+		seedTask.RootReq.Url = seedTask.Url
+
+		reqQueue = append(reqQueue, seedTask.RootReq)
+	}
+
 	go func() {
 		for {
 			var req *collect.Request
-			//var ch chan *collect.Request
-			ch := make(chan *collect.Request)
+			var ch chan *collect.Request
+			//ch := make(chan *collect.Request)
 
 			if len(reqQueue) > 0 {
 				req = reqQueue[0]
@@ -45,40 +63,37 @@ func (s *ScheduleEngine) Schedule() {
 			}
 
 			select {
-			case r := <-s.requestCh:
+			case r := <-s.requestCh: // 监听一次fetch的解析结果中是否有新的request加入
 				reqQueue = append(reqQueue, r)
-			case ch <- req:
+			case ch <- req: // 传递给workerCh
 			}
 		}
 	}()
 }
 
-func NewSchedule(opts ...Option) *ScheduleEngine {
-	options := defaultOptions
-
-	// 选项模式，根据需要丰富defaultOptions
-	for _, opt := range opts {
-		opt(&options)
-	}
-	s := &ScheduleEngine{}
-
-	s.options = options
-
-	return s
-}
-
-func (s *ScheduleEngine) CreateWork() {
+func (s *Schedule) CreateWork() {
 	for {
 		r := <-s.workerCh
-		// 判断r是否超过爬取的最高深度
+		//判断r是否超过爬取的最高深度
 		if err := r.Check(); err != nil {
 			s.Logger.Error("check failed", zap.Error(err))
 			continue
 		}
 		body, err := s.Fetcher.Get(r)
 		//fmt.Println("[++]", string(body))
+		if len(body) < 6000 {
+			s.Logger.Error("can't fetch ",
+				zap.Int("length", len(body)),
+				zap.String("url", r.Url),
+			)
+			continue
+		}
+
 		if err != nil {
-			s.Logger.Error("can not fetch ", zap.Error(err))
+			s.Logger.Error("can not fetch ",
+				zap.Error(err),
+				zap.String("url", r.Url),
+			)
 			continue
 		}
 		// todo: 错误的r，需要重新爬取
@@ -87,7 +102,7 @@ func (s *ScheduleEngine) CreateWork() {
 	}
 }
 
-func (s *ScheduleEngine) HandleResult() {
+func (s *Schedule) HandleResult() {
 	for {
 		select {
 		case result := <-s.out:

@@ -52,7 +52,7 @@ type BrowserFetch struct {
 }
 
 // Get 模拟浏览器访问
-func (b BrowserFetch) Get(r *Request) ([]byte, error) {
+func (b BrowserFetch) Get(request *Request) ([]byte, error) {
 	client := &http.Client{
 		Timeout: b.Timeout,
 	}
@@ -63,23 +63,28 @@ func (b BrowserFetch) Get(r *Request) ([]byte, error) {
 		client.Transport = transport
 	}
 
-	req, err := http.NewRequest("GET", r.Url, nil)
+	req, err := http.NewRequest("GET", request.Url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("get url failed:%v", err)
 	}
 
-	//req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
+	if len(request.Task.Cookie) > 0 {
+		req.Header.Set("Cookie", request.Task.Cookie)
+	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36")
 
+	//req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
+
 	resp, err := client.Do(req)
+
+	time.Sleep(request.Task.WaitTime)
+
 	if err != nil {
+		b.Logger.Error("fetch failed",
+			zap.Error(err),
+		)
 		return nil, err
 	}
-
-	//bodyRes, _ := ioutil.ReadAll(resp.Body)
-	//resbody := ioutil.NopCloser(bytes.NewReader(bodyRes))
-	// 检测是否触发反爬
-	//checkAntiCrawler(rr)
 
 	bodyReader := bufio.NewReader(resp.Body)
 	e := DeterminEncoding(bodyReader)

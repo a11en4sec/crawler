@@ -2,16 +2,28 @@ package collect
 
 import (
 	"errors"
+	"sync"
 	"time"
 )
 
+// Task 一个任务实例
+type Task struct {
+	Url         string
+	Cookie      string
+	WaitTime    time.Duration
+	MaxDepth    int
+	Visited     map[string]bool
+	VisitedLock sync.Mutex
+	RootReq     *Request // 起始待爬的资源(seed)
+	Fetcher     Fetcher
+}
+
+// Request 单个请求
 type Request struct {
+	Task      *Task
 	Url       string
-	Cookie    string
-	ParseFunc func([]byte, *Request) ParseResult
-	WaitTime  time.Duration
 	Depth     int
-	MaxDepth  int
+	ParseFunc func([]byte, *Request) ParseResult
 }
 
 type ParseResult struct {
@@ -20,7 +32,8 @@ type ParseResult struct {
 }
 
 func (r *Request) Check() error {
-	if r.Depth > r.MaxDepth {
+	//fmt.Printf("r.depth:%d , r.Task.MaxDepth:%d\n", r.Depth, r.Task.MaxDepth)
+	if r.Depth > r.Task.MaxDepth {
 		return errors.New("max depth limit reached")
 	}
 	return nil
