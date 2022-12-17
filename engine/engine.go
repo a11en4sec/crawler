@@ -9,6 +9,7 @@ func NewEngine(opts ...Option) *Crawler {
 		opt(&options)
 	}
 	e := &Crawler{}
+	e.Visited = make(map[string]bool, 100)
 	out := make(chan collect.ParseResult)
 	e.out = out
 	e.options = options

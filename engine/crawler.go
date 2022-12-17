@@ -56,12 +56,24 @@ func (s *Crawler) Schedule() {
 
 func (s *Crawler) CreateWork() {
 	for {
-		r := s.scheduler.Pull()
+		r := s.scheduler.Pull() // 从workerChan中拉取一个req
+
 		//判断r是否超过爬取的最高深度
 		if err := r.Check(); err != nil {
 			s.Logger.Error("check failed", zap.Error(err))
 			continue
 		}
+
+		// 判断当前请求是否已被访问
+		if s.HasVisited(r) {
+			s.Logger.Debug("request has visited",
+				zap.String("url:", r.Url),
+			)
+			continue
+		}
+		// 没有被访问，存到map中
+		s.StoreVisited(r)
+
 		body, err := s.Fetcher.Get(r)
 		//fmt.Println("[++]", string(body))
 		if len(body) < 6000 {
@@ -97,5 +109,22 @@ func (s *Crawler) HandleResult() {
 				s.Logger.Sugar().Info("get result ", item)
 			}
 		}
+	}
+}
+
+func (e *Crawler) HasVisited(r *collect.Request) bool {
+	e.VisitedLock.Lock()
+	defer e.VisitedLock.Unlock()
+	unique := r.Unique()
+	return e.Visited[unique]
+}
+
+func (e *Crawler) StoreVisited(reqs ...*collect.Request) {
+	e.VisitedLock.Lock()
+	defer e.VisitedLock.Unlock()
+
+	for _, r := range reqs {
+		unique := r.Unique()
+		e.Visited[unique] = true
 	}
 }
