@@ -93,6 +93,12 @@ func (s *Crawler) CreateWork() {
 		}
 		// todo: 错误的r，需要重新爬取
 		result := r.ParseFunc(body, r)
+
+		// 解析结果里面新的url，继续爬
+		if len(result.Requesrts) > 0 {
+			go s.scheduler.Push(result.Requesrts...)
+		}
+
 		s.out <- result
 	}
 }
