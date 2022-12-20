@@ -76,7 +76,7 @@ func (s *Schedule) Schedule() {
 		}
 
 		select {
-		case r := <-s.requestCh: // 监听一次fetch的解析结果中是否有新的request加入
+		case r := <-s.requestCh: // 种子req加入，以及fetch的解析结果中有新的request加入
 			//s.reqQueue = append(s.reqQueue, r)
 			if r.Priority > 0 {
 				s.priReqQueue = append(s.priReqQueue, r)
@@ -86,6 +86,7 @@ func (s *Schedule) Schedule() {
 		case workerCh <- req: // 传递给workerCh
 			//fmt.Println("123")
 			req = nil
+			// todo: ？？ 为什么置nil
 			workerCh = nil
 		}
 	}
