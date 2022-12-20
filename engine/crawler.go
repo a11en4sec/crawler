@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"github.com/a11en4sec/crawler/collect"
 	"github.com/a11en4sec/crawler/parse/doubangroup"
 	"go.uber.org/zap"
@@ -9,6 +10,7 @@ import (
 
 func init() {
 	Store.Add(doubangroup.DoubangroupTask)
+	Store.AddJSTask(doubangroup.DoubangroupJSTask)
 }
 
 func (c *CrawlerStore) Add(task *collect.Task) {
@@ -36,19 +38,19 @@ type Crawler struct {
 	options
 }
 
-func (s *Crawler) Run() {
-	go s.Schedule()
+func (e *Crawler) Run() {
+	go e.Schedule()
 
-	for i := 0; i < s.WorkCount; i++ {
-		go s.CreateWork()
+	for i := 0; i < e.WorkCount; i++ {
+		go e.CreateWork()
 	}
 
-	s.HandleResult()
+	e.HandleResult()
 }
 
-func (s *Crawler) Schedule() {
+func (e *Crawler) Schedule() {
 	var reqQueue []*collect.Request
-	for _, seedTask := range s.Seeds {
+	for _, seedTask := range e.Seeds {
 		//seedTask.RootReq.Task = seedTask
 		//seedTask.RootReq.Url = seedTask.Url
 		//reqQueue = append(reqQueue, seedTask.RootReq)
@@ -58,14 +60,21 @@ func (s *Crawler) Schedule() {
 		task.Fetcher = seedTask.Fetcher
 
 		// 取出Task的根，根节点(执行入口),生成爬虫的种子网站
-		rootReqs := task.Rule.Root()
+		rootReqs, err := task.Rule.Root()
+		if err != nil {
+			e.Logger.Error("get root failed",
+				zap.Error(err),
+			)
+			continue
+		}
+
 		for _, req := range rootReqs {
 			req.Task = task
 		}
 		reqQueue = append(reqQueue, rootReqs...)
 	}
-	go s.scheduler.Schedule()
-	go s.scheduler.Push(reqQueue...)
+	go e.scheduler.Schedule()
+	go e.scheduler.Push(reqQueue...)
 
 	//go func() {
 	//	for {
@@ -76,11 +85,11 @@ func (s *Crawler) Schedule() {
 	//		if len(reqQueue) > 0 {
 	//			req = reqQueue[0]
 	//			reqQueue = reqQueue[1:]
-	//			ch = s.workerCh
+	//			ch = e.workerCh
 	//		}
 	//
 	//		select {
-	//		case r := <-s.requestCh: // 监听一次fetch的解析结果中是否有新的request加入
+	//		case r := <-e.requestCh: // 监听一次fetch的解析结果中是否有新的request加入
 	//			reqQueue = append(reqQueue, r)
 	//		case ch <- req: // 传递给workerCh
 	//		}
@@ -88,45 +97,46 @@ func (s *Crawler) Schedule() {
 	//}()
 }
 
-func (s *Crawler) CreateWork() {
+func (e *Crawler) CreateWork() {
 	for {
-		req := s.scheduler.Pull() // 从workerChan中拉取一个req
+		req := e.scheduler.Pull() // 从workerChan中拉取一个req
 
 		//判断r是否超过爬取的最高深度
 		if err := req.Check(); err != nil {
-			s.Logger.Error("check failed", zap.Error(err))
+			e.Logger.Error("check failed", zap.Error(err))
 			continue
 		}
 
 		// 判断当前请求是否已被访问
-		if !req.Task.Reload && s.HasVisited(req) {
-			s.Logger.Debug("request has visited",
+		if !req.Task.Reload && e.HasVisited(req) {
+			e.Logger.Debug("request has visited",
 				zap.String("url:", req.Url),
 			)
 			continue
 		}
 		// 没有被访问，存到map中
-		s.StoreVisited(req)
+		e.StoreVisited(req)
 
-		body, err := s.Fetcher.Get(req)
+		body, err := e.Fetcher.Get(req)
 		//fmt.Println("[++]", string(body))
 		if err != nil {
-			s.Logger.Error("can not fetch ",
+			e.Logger.Error("can not fetch ",
 				zap.Error(err),
 				zap.String("url", req.Url),
 			)
 			// 请求失败，将请求放到错误map中
-			s.SetFailure(req)
+			e.SetFailure(req)
 			continue
 		}
 
 		if len(body) < 6000 {
-			s.Logger.Error("can't fetch ",
+			e.Logger.Error("can't fetch ",
 				zap.Int("length", len(body)),
 				zap.String("url", req.Url),
 			)
+			fmt.Println("body", string(body))
 			// 请求失败，将请求放到错误map中
-			s.SetFailure(req)
+			e.SetFailure(req)
 			continue
 		}
 
@@ -135,68 +145,77 @@ func (s *Crawler) CreateWork() {
 		rule := req.Task.Rule.Trunk[req.RuleName]
 
 		// 处理fetch(req)回来的结果
-		result := rule.ParseFunc(&collect.Context{
+		result, err := rule.ParseFunc(&collect.Context{
 			body,
 			req,
 		})
-		// 解析结果里面新的url，继续爬
-		if len(result.Requesrts) > 0 {
-			go s.scheduler.Push(result.Requesrts...)
+
+		if err != nil {
+			e.Logger.Error("ParseFunc failed ",
+				zap.Error(err),
+				zap.String("url", req.Url),
+			)
+			continue
 		}
 
-		s.out <- result
+		// 解析结果里面新的url，继续爬
+		if len(result.Requesrts) > 0 {
+			go e.scheduler.Push(result.Requesrts...)
+		}
+
+		e.out <- result
 	}
 }
 
-func (s *Crawler) HandleResult() {
+func (e *Crawler) HandleResult() {
 	for {
 		select {
-		case result := <-s.out:
+		case result := <-e.out:
 			//for _, req := range result.Requesrts {
-			//	s.requestCh <- req
+			//	e.requestCh <- req
 			//}
 			for _, item := range result.Items {
 				// todo: store
-				s.Logger.Sugar().Info("get result ", item)
+				e.Logger.Sugar().Info("get result ", item)
 			}
 		}
 	}
 }
 
-func (s *Crawler) HasVisited(r *collect.Request) bool {
-	s.VisitedLock.Lock()
-	defer s.VisitedLock.Unlock()
+func (e *Crawler) HasVisited(r *collect.Request) bool {
+	e.VisitedLock.Lock()
+	defer e.VisitedLock.Unlock()
 	unique := r.Unique()
-	return s.Visited[unique]
+	return e.Visited[unique]
 }
 
-func (s *Crawler) StoreVisited(reqs ...*collect.Request) {
-	s.VisitedLock.Lock()
-	defer s.VisitedLock.Unlock()
+func (e *Crawler) StoreVisited(reqs ...*collect.Request) {
+	e.VisitedLock.Lock()
+	defer e.VisitedLock.Unlock()
 
 	for _, r := range reqs {
 		unique := r.Unique()
-		s.Visited[unique] = true
+		e.Visited[unique] = true
 	}
 }
 
-func (s *Crawler) SetFailure(req *collect.Request) {
+func (e *Crawler) SetFailure(req *collect.Request) {
 	// 没有被重新爬取过,第一次fetch失败
 	if !req.Task.Reload {
-		s.VisitedLock.Lock()
+		e.VisitedLock.Lock()
 		unique := req.Unique()
 		// 从已爬取的map中删除该req
-		delete(s.Visited, unique)
-		s.VisitedLock.Unlock()
+		delete(e.Visited, unique)
+		e.VisitedLock.Unlock()
 	}
-	s.failureLock.Lock()
-	defer s.failureLock.Unlock()
+	e.failureLock.Lock()
+	defer e.failureLock.Unlock()
 
 	// 失败队列中没有，说明是首次失败
-	if _, ok := s.failures[req.Unique()]; !ok {
+	if _, ok := e.failures[req.Unique()]; !ok {
 		// 首次失败时，再重新执行一次
-		s.failures[req.Unique()] = req
-		s.scheduler.Push(req)
+		e.failures[req.Unique()] = req
+		e.scheduler.Push(req)
 	}
 	// todo: 失败2次，加载到失败队列中
 }
