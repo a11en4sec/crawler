@@ -45,10 +45,10 @@ func (s *Schedule) Pull() *collect.Request {
 	return r
 }
 
-func (s *Schedule) Output() *collect.Request {
-	r := <-s.workerCh
-	return r
-}
+//func (s *Schedule) Output() *collect.Request {
+//	r := <-s.workerCh
+//	return r
+//}
 
 func (s *Schedule) Schedule() {
 	// 初始化不能放在协程中,否在会丢失请求

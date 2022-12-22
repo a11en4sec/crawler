@@ -20,7 +20,7 @@ requestCh----> reqQueue -----> workerCh ----------> out-----------> result:
 requestCh--> reqQueue(普通队列）     ----->workerCh-------> CreateWorker() ------------------------> out通道--result.Items ==> DB 
 ^       |--> priReqQueue(优先级队列) ------>|     |-------> CreateWorker()             |
 |                                               |--------> CreateWorker()         - result.Requestrts...
-|                                                                                    |       
+|                                               | ......                             |       
 |                                                                                    |
 |                                                                                    |
 |---------------<----------------------<--------Push-------------<-------------------|

@@ -5,11 +5,6 @@ import (
 	"github.com/robertkrimen/otto"
 )
 
-type mystruct struct {
-	Name string
-	Age  int
-}
-
 // AddJsReqs 用于动态规则添加请求。
 func AddJsReqs(jreqs []map[string]interface{}) []*collect.Request {
 	reqs := make([]*collect.Request, 0)
@@ -65,6 +60,7 @@ func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
 	}
 
 	for _, r := range m.Rules {
+		// 将js编写的字符串，转成go代码，并执行
 		paesrFunc := func(parse string) func(ctx *collect.Context) (collect.ParseResult, error) {
 			return func(ctx *collect.Context) (collect.ParseResult, error) {
 				vm := otto.New()
@@ -87,7 +83,7 @@ func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
 			task.Rule.Trunk = make(map[string]*collect.Rule, 0)
 		}
 		task.Rule.Trunk[r.Name] = &collect.Rule{
-			paesrFunc,
+			ParseFunc: paesrFunc,
 		}
 	}
 

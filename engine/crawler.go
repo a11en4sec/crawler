@@ -3,15 +3,9 @@ package engine
 import (
 	"fmt"
 	"github.com/a11en4sec/crawler/collect"
-	"github.com/a11en4sec/crawler/parse/doubangroup"
 	"go.uber.org/zap"
 	"sync"
 )
-
-func init() {
-	Store.Add(doubangroup.DoubangroupTask)
-	Store.AddJSTask(doubangroup.DoubangroupJSTask)
-}
 
 func (c *CrawlerStore) Add(task *collect.Task) {
 	c.hash[task.Name] = task

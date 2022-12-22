@@ -1,4 +1,4 @@
-package doubangroup
+package doubangroupjs
 
 import (
 	"github.com/a11en4sec/crawler/collect"

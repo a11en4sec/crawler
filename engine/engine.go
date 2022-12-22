@@ -1,6 +1,17 @@
 package engine
 
-import "github.com/a11en4sec/crawler/collect"
+import (
+	"github.com/a11en4sec/crawler/collect"
+	"github.com/a11en4sec/crawler/parse/doubanbook"
+	"github.com/a11en4sec/crawler/parse/doubangroup"
+	"github.com/a11en4sec/crawler/parse/doubangroupjs"
+)
+
+func init() {
+	Store.Add(doubangroup.DoubangroupTask)
+	Store.AddJSTask(doubangroupjs.DoubangroupJSTask)
+	Store.Add(doubanbook.DoubanBookTask)
+}
 
 func NewEngine(opts ...Option) *Crawler {
 	options := defaultOptions
@@ -15,5 +26,4 @@ func NewEngine(opts ...Option) *Crawler {
 	e.options = options
 
 	return e
-
 }

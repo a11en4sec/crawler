@@ -19,23 +19,12 @@ type Property struct {
 
 // Task 一个任务实例
 type Task struct {
-	//Name        string // 用户界面显示的名称（应保证唯一性）
-	//Url         string
-	//Cookie      string
-	//WaitTime    time.Duration
-	//Reload      bool // 网站是否可以重复爬取
-	//MaxDepth    int
 	Property
 	Visited     map[string]bool
 	VisitedLock sync.Mutex
 	//RootReq     *Request // 起始待爬的资源(seed)
 	Rule    RuleTree //规则树
 	Fetcher Fetcher
-}
-
-type Context struct {
-	Body []byte
-	Req  *Request
 }
 
 // Request 单个请求
@@ -47,6 +36,8 @@ type Request struct {
 	Depth    int64
 	//ParseFunc func([]byte, *Request) ParseResult
 	RuleName string
+	TmpData  *Temp // 方法数据
+
 }
 
 type ParseResult struct {

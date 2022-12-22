@@ -38,8 +38,8 @@ var DoubangroupTask = &collect.Task{
 			return roots, nil
 		},
 		Trunk: map[string]*collect.Rule{
-			"解析网站URL": &collect.Rule{ParseURL},
-			"解析阳台房":   &collect.Rule{GetSunRoom},
+			"解析网站URL": &collect.Rule{ParseFunc: ParseURL},
+			"解析阳台房":   &collect.Rule{ParseFunc: GetSunRoom},
 		},
 	},
 	Fetcher: nil,
