@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"github.com/a11en4sec/crawler/collector"
 	"sync"
 	"time"
 )
@@ -25,6 +26,7 @@ type Task struct {
 	//RootReq     *Request // 起始待爬的资源(seed)
 	Rule    RuleTree //规则树
 	Fetcher Fetcher
+	Storage collector.Storage // 存储
 }
 
 // Request 单个请求

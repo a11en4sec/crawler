@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// DoubanBookTask 引擎初始化的时候加载
 var DoubanBookTask = &collect.Task{
 	Property: collect.Property{
 		Name: "douban_book_list",
@@ -64,6 +65,7 @@ func ParseTag(ctx *collect.Context) (collect.ParseResult, error) {
 
 	matches := re.FindAllSubmatch(ctx.Body, -1)
 	result := collect.ParseResult{}
+
 	if len(matches) == 0 {
 		fmt.Println("[-]正则没有匹配到.")
 		return result, errors.New("正则没有匹配到.")
@@ -81,7 +83,7 @@ func ParseTag(ctx *collect.Context) (collect.ParseResult, error) {
 	}
 
 	// 在添加limit之前，临时减少抓取数量,防止被服务器封禁
-	result.Requesrts = result.Requesrts[:1]
+	result.Requesrts = result.Requesrts[:3]
 	return result, nil
 }
 
@@ -105,7 +107,7 @@ func ParseBookList(ctx *collect.Context) (collect.ParseResult, error) {
 		result.Requesrts = append(result.Requesrts, req)
 	}
 	// 在添加limit之前，临时减少抓取数量,防止被服务器封禁
-	result.Requesrts = result.Requesrts[:1]
+	result.Requesrts = result.Requesrts[:3]
 
 	return result, nil
 }
@@ -130,6 +132,7 @@ func ParseBookDetail(ctx *collect.Context) (collect.ParseResult, error) {
 		"价格":  ExtraString(ctx.Body, priceRe),
 		"简介":  ExtraString(ctx.Body, intoRe),
 	}
+	// 将context 转成dataCell
 	data := ctx.Output(book)
 
 	result := collect.ParseResult{

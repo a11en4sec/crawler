@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"github.com/a11en4sec/crawler/collect"
+	"github.com/a11en4sec/crawler/collector"
 	"go.uber.org/zap"
 	"sync"
 )
@@ -35,9 +36,12 @@ func (e *Crawler) Schedule() {
 
 		// 从全局store中取出Task
 		task := Store.Hash[seedTask.Name]
+		// 1 将在main函数中初始化给seed的fetch，赋值给task
 		task.Fetcher = seedTask.Fetcher
+		// 2 将在main函数中初始化给seed的storage，赋值给task
+		task.Storage = seedTask.Storage
 
-		// 取出Task的根，根节点(执行入口),生成爬虫的种子网站
+		// 取出Task的根，根中存储的是种子url的列表
 		rootReqs, err := task.Rule.Root()
 		if err != nil {
 			e.Logger.Error("get root failed",
@@ -46,6 +50,7 @@ func (e *Crawler) Schedule() {
 			continue
 		}
 
+		// 遍历，并且把task赋值给每一个req，后面处理爬回内容时，需要从task中获取一些信息
 		for _, req := range rootReqs {
 			req.Task = task
 		}
@@ -153,8 +158,17 @@ func (e *Crawler) HandleResult() {
 			//	e.requestCh <- req
 			//}
 			for _, item := range result.Items {
-				// todo: store
 				e.Logger.Sugar().Info("get result ", item)
+
+				switch d := item.(type) {
+				case *collector.DataCell:
+					name := d.GetTaskName()
+					task := Store.Hash[name]
+
+					task.Storage.Save(d)
+
+				}
+				//e.Logger.Sugar().Info("get result ", item)
 			}
 		}
 	}

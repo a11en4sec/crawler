@@ -3,6 +3,7 @@ module github.com/a11en4sec/crawler
 go 1.18
 
 require (
+	github.com/go-sql-driver/mysql v1.7.0
 	github.com/panjf2000/ants/v2 v2.6.0
 	github.com/robertkrimen/otto v0.2.1
 	github.com/stretchr/testify v1.8.1

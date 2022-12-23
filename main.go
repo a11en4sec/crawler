@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/a11en4sec/crawler/collect"
+	"github.com/a11en4sec/crawler/collector"
+	"github.com/a11en4sec/crawler/collector/sqlstorage"
 	"github.com/a11en4sec/crawler/engine"
 	"github.com/a11en4sec/crawler/log"
 	"github.com/a11en4sec/crawler/proxy"
@@ -21,6 +23,7 @@ func main() {
 	_, err := proxy.RoundRobinProxySwitcher(proxyURLs...)
 	if err != nil {
 		logger.Error("RoundRobinProxySwitcher failed")
+		return
 	}
 
 	// fetcher
@@ -28,6 +31,18 @@ func main() {
 		Timeout: 3000 * time.Millisecond,
 		Logger:  logger,
 		//Proxy:   p,
+	}
+
+	// storage
+	var storage collector.Storage
+	storage, err = sqlstorage.New(
+		sqlstorage.WithSqlUrl("root:root@r00t@tcp(127.0.0.1:3306)/crawler?charset=utf8"),
+		sqlstorage.WithLogger(logger.Named("sqlDB")),
+		sqlstorage.WithBatchCount(2),
+	)
+	if err != nil {
+		logger.Error("create sqlstorage failed")
+		return
 	}
 
 	// seeds
@@ -38,6 +53,7 @@ func main() {
 			Name: "douban_book_list",
 		},
 		Fetcher: f,
+		Storage: storage,
 	})
 
 	s := engine.NewEngine(
