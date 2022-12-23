@@ -7,22 +7,6 @@ import (
 	"sync"
 )
 
-func (c *CrawlerStore) Add(task *collect.Task) {
-	c.hash[task.Name] = task
-	c.list = append(c.list, task)
-}
-
-// Store 全局蜘蛛种类实例
-var Store = &CrawlerStore{
-	list: []*collect.Task{},
-	hash: map[string]*collect.Task{},
-}
-
-type CrawlerStore struct {
-	list []*collect.Task
-	hash map[string]*collect.Task
-}
-
 type Crawler struct {
 	out         chan collect.ParseResult
 	Visited     map[string]bool // keys is md5(URL + method)
@@ -50,7 +34,7 @@ func (e *Crawler) Schedule() {
 		//reqQueue = append(reqQueue, seedTask.RootReq)
 
 		// 从全局store中取出Task
-		task := Store.hash[seedTask.Name]
+		task := Store.Hash[seedTask.Name]
 		task.Fetcher = seedTask.Fetcher
 
 		// 取出Task的根，根节点(执行入口),生成爬虫的种子网站
