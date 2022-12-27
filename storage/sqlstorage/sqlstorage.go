@@ -2,27 +2,27 @@ package sqlstorage
 
 import (
 	"encoding/json"
-	"github.com/a11en4sec/crawler/collector"
 	"github.com/a11en4sec/crawler/engine"
 	"github.com/a11en4sec/crawler/sqldb"
+	"github.com/a11en4sec/crawler/storage"
 	"go.uber.org/zap"
 )
 
-type SqlStore struct {
-	dataDocker  []*collector.DataCell //分批输出结果缓存
-	columnNames []sqldb.Field         //标题字段
-	db          sqldb.DBer            //接口
+type SqlStorage struct {
+	dataDocker  []*storage.DataCell //分批输出结果缓存
+	columnNames []sqldb.Field       //标题字段
+	db          sqldb.DBer          //接口
 	Table       map[string]struct{}
 	options
 }
 
-func New(opts ...Option) (*SqlStore, error) {
+func New(opts ...Option) (*SqlStorage, error) {
 	options := defaultoptions
 	// 每个函数，一次作用于默认的选项(不停被修改、增强)
 	for _, opt := range opts {
 		opt(&options)
 	}
-	s := &SqlStore{
+	s := &SqlStorage{
 		dataDocker:  nil,
 		columnNames: nil,
 		db:          nil,
@@ -39,7 +39,7 @@ func New(opts ...Option) (*SqlStore, error) {
 }
 
 // Save 实现storage
-func (s *SqlStore) Save(dataCells ...*collector.DataCell) error {
+func (s *SqlStorage) Save(dataCells ...*storage.DataCell) error {
 	for _, cell := range dataCells {
 		name := cell.GetTableName()
 		if _, ok := s.Table[name]; !ok {
@@ -78,7 +78,7 @@ func (s *SqlStore) Save(dataCells ...*collector.DataCell) error {
 	return nil
 }
 
-func getFields(cell *collector.DataCell) []sqldb.Field {
+func getFields(cell *storage.DataCell) []sqldb.Field {
 	taskName := cell.Data["Task"].(string)
 	ruleName := cell.Data["Rule"].(string)
 	fields := engine.GetFields(taskName, ruleName)
@@ -99,7 +99,7 @@ func getFields(cell *collector.DataCell) []sqldb.Field {
 
 }
 
-func (s *SqlStore) Flush() error {
+func (s *SqlStorage) Flush() error {
 	if len(s.dataDocker) == 0 {
 		return nil
 	}

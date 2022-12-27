@@ -19,9 +19,9 @@ type Sqldb struct {
 	db *sql.DB
 }
 
-func newSqldb() *Sqldb {
-	return &Sqldb{}
-}
+//func newSqldb() *Sqldb {
+//	return &Sqldb{}
+//}
 
 // Field 每列的信息
 type Field struct {

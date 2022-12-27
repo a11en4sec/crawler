@@ -1,4 +1,4 @@
-package collector
+package storage
 
 type Storage interface {
 	Save(datas ...*DataCell) error

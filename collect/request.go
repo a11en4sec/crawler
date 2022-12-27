@@ -1,21 +1,25 @@
 package collect
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"github.com/a11en4sec/crawler/collector"
+	"github.com/a11en4sec/crawler/limiter"
+	"github.com/a11en4sec/crawler/storage"
+	"math/rand"
 	"sync"
 	"time"
 )
 
 type Property struct {
-	Name     string        `json:"name"` // 任务名称，应保证唯一性
-	Url      string        `json:"url"`
-	Cookie   string        `json:"cookie"`
-	WaitTime time.Duration `json:"wait_time"`
-	Reload   bool          `json:"reload"` // 网站是否可以重复爬取
-	MaxDepth int64         `json:"max_depth"`
+	Name   string `json:"name"` // 任务名称，应保证唯一性
+	Url    string `json:"url"`
+	Cookie string `json:"cookie"`
+	//WaitTime time.Duration `json:"wait_time"`
+	WaitTime int64 `json:"wait_time"`
+	Reload   bool  `json:"reload"` // 网站是否可以重复爬取
+	MaxDepth int64 `json:"max_depth"`
 }
 
 // Task 一个任务实例
@@ -26,7 +30,8 @@ type Task struct {
 	//RootReq     *Request // 起始待爬的资源(seed)
 	Rule    RuleTree //规则树
 	Fetcher Fetcher
-	Storage collector.Storage // 存储
+	Storage storage.Storage     // 存储
+	Limit   limiter.RateLimiter // 限速器
 }
 
 // Request 单个请求
@@ -59,4 +64,14 @@ func (r *Request) Check() error {
 func (r *Request) Unique() string {
 	block := md5.Sum([]byte(r.Url + r.Method))
 	return hex.EncodeToString(block[:])
+}
+
+func (r *Request) Fetch() ([]byte, error) {
+	if err := r.Task.Limit.Wait(context.Background()); err != nil {
+		return nil, err
+	}
+	// 随机休眠，模拟人类行为
+	st := rand.Int63n(r.Task.WaitTime * 1000)
+	time.Sleep(time.Duration(st) * time.Millisecond)
+	return r.Task.Fetcher.Get(r)
 }

@@ -11,6 +11,7 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/net v0.2.0
 	golang.org/x/text v0.4.0
+	golang.org/x/time v0.3.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 

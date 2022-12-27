@@ -3,7 +3,7 @@ package engine
 import (
 	"fmt"
 	"github.com/a11en4sec/crawler/collect"
-	"github.com/a11en4sec/crawler/collector"
+	"github.com/a11en4sec/crawler/storage"
 	"go.uber.org/zap"
 	"sync"
 )
@@ -40,6 +40,9 @@ func (e *Crawler) Schedule() {
 		task.Fetcher = seedTask.Fetcher
 		// 2 将在main函数中初始化给seed的storage，赋值给task
 		task.Storage = seedTask.Storage
+
+		// 3 将在main函数中初始化给seed的limit，赋值给task
+		task.Limit = seedTask.Limit
 
 		// 取出Task的根，根中存储的是种子url的列表
 		rootReqs, err := task.Rule.Root()
@@ -100,7 +103,8 @@ func (e *Crawler) CreateWork() {
 		// 没有被访问，存到map中
 		e.StoreVisited(req)
 
-		body, err := e.Fetcher.Get(req)
+		//body, err := e.Fetcher.Get(req)
+		body, err := req.Fetch()
 		//fmt.Println("[++]", string(body))
 		if err != nil {
 			e.Logger.Error("can not fetch ",
@@ -161,7 +165,7 @@ func (e *Crawler) HandleResult() {
 				e.Logger.Sugar().Info("get result ", item)
 
 				switch d := item.(type) {
-				case *collector.DataCell:
+				case *storage.DataCell:
 					name := d.GetTaskName()
 					task := Store.Hash[name]
 
