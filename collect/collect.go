@@ -29,14 +29,14 @@ func (BaseFetch) Get(req *Request) ([]byte, error) {
 	resp, err := http.Get(req.Url)
 
 	if err != nil {
-		fmt.Println(err)
+		//fmt.Println(err)
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Error status code:%d", resp.StatusCode)
+		//fmt.Printf("Error status code:%d", resp.StatusCode)
 		return nil, err
 	}
 
@@ -73,16 +73,15 @@ func (b BrowserFetch) Get(request *Request) ([]byte, error) {
 		req.Header.Set("Cookie", request.Task.Cookie)
 	}
 	req.Header.Set("User-Agent", extensions.GenerateRandomUA())
-	//req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36")
-
-	//req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
 
 	resp, err := client.Do(req)
 
 	if err != nil {
-		b.Logger.Error("fetch failed",
-			zap.Error(err),
-		)
+		// 统一在creatework 的 defer中处理
+
+		//b.Logger.Error("fetch failed",
+		//	zap.Error(err),
+		//)
 		return nil, err
 	}
 

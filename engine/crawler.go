@@ -5,6 +5,7 @@ import (
 	"github.com/a11en4sec/crawler/collect"
 	"github.com/a11en4sec/crawler/storage"
 	"go.uber.org/zap"
+	"runtime/debug"
 	"sync"
 )
 
@@ -84,6 +85,15 @@ func (e *Crawler) Schedule() {
 }
 
 func (e *Crawler) CreateWork() {
+	defer func() {
+		if err := recover(); err != nil {
+			e.Logger.Error("worker panic",
+				zap.Any("err", err),
+				zap.String("stack", string(debug.Stack())))
+		}
+
+	}()
+
 	for {
 		req := e.scheduler.Pull() // 从workerChan中拉取一个req
 
