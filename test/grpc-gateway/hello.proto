@@ -1,0 +1,21 @@
+syntax = "proto3";
+option go_package = "proto/greeter";
+import "google/api/annotations.proto";
+// 引入依赖
+
+service Greeter {
+  rpc Hello(Request) returns (Response) {
+    // grpc-gateway 的插件会识别到这个自定义选项，并生成 HTTP 代理服务
+    option (google.api.http) = {
+      post: "/greeter/hello" body: "*"
+    };
+  }
+}
+
+message Request {
+  string name = 1;
+}
+
+message Response {
+  string greeting = 2;
+}

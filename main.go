@@ -37,12 +37,11 @@ func main() {
 
 	// storage
 	var storage storage.Storage
-	storage, err = sqlstorage.New(
+	if storage, err = sqlstorage.New(
 		sqlstorage.WithSqlUrl("root:root@r00t@tcp(127.0.0.1:3306)/crawler?charset=utf8"),
 		sqlstorage.WithLogger(logger.Named("sqlDB")),
 		sqlstorage.WithBatchCount(2),
-	)
-	if err != nil {
+	); err != nil {
 		logger.Error("create sqlstorage failed")
 		return
 	}
@@ -73,5 +72,8 @@ func main() {
 		engine.WithSeeds(seeds),
 		engine.WithScheduler(engine.NewSchedule()),
 	)
-	s.Run()
+
+	// start worker
+	go s.Run()
+
 }
