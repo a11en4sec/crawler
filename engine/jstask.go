@@ -11,16 +11,19 @@ func AddJsReqs(jreqs []map[string]interface{}) []*collect.Request {
 
 	for _, jreq := range jreqs {
 		req := &collect.Request{}
-		u, ok := jreq["Url"].(string)
+		u, ok := jreq["URL"].(string)
+
 		if !ok {
 			return nil
 		}
-		req.Url = u
+
+		req.URL = u
 		req.RuleName, _ = jreq["RuleName"].(string)
 		req.Method, _ = jreq["Method"].(string)
 		req.Priority, _ = jreq["Priority"].(int64)
 		reqs = append(reqs, req)
 	}
+
 	return reqs
 }
 
@@ -28,15 +31,18 @@ func AddJsReqs(jreqs []map[string]interface{}) []*collect.Request {
 func AddJsReq(jreq map[string]interface{}) []*collect.Request {
 	reqs := make([]*collect.Request, 0)
 	req := &collect.Request{}
-	u, ok := jreq["Url"].(string)
+	u, ok := jreq["URL"].(string)
+
 	if !ok {
 		return nil
 	}
-	req.Url = u
+
+	req.URL = u
 	req.RuleName, _ = jreq["RuleName"].(string)
 	req.Method, _ = jreq["Method"].(string)
 	req.Priority, _ = jreq["Priority"].(int64)
 	reqs = append(reqs, req)
+
 	return reqs
 }
 
@@ -47,15 +53,22 @@ func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
 
 	task.Rule.Root = func() ([]*collect.Request, error) {
 		vm := otto.New()
-		vm.Set("AddJsReq", AddJsReqs)
+		if err := vm.Set("AddJsReq", AddJsReqs); err != nil {
+			return nil, err
+		}
+
 		v, err := vm.Eval(m.Root)
+
 		if err != nil {
 			return nil, err
 		}
+
 		e, err := v.Export()
+
 		if err != nil {
 			return nil, err
 		}
+
 		return e.([]*collect.Request), nil
 	}
 
@@ -64,24 +77,35 @@ func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
 		paesrFunc := func(parse string) func(ctx *collect.Context) (collect.ParseResult, error) {
 			return func(ctx *collect.Context) (collect.ParseResult, error) {
 				vm := otto.New()
-				vm.Set("ctx", ctx)
+
+				if err := vm.Set("ctx", ctx); err != nil {
+					return collect.ParseResult{}, err
+				}
+
 				v, err := vm.Eval(parse)
+
 				if err != nil {
 					return collect.ParseResult{}, err
 				}
+
 				e, err := v.Export()
+
 				if err != nil {
 					return collect.ParseResult{}, err
 				}
+
 				if e == nil {
 					return collect.ParseResult{}, err
 				}
+
 				return e.(collect.ParseResult), err
 			}
 		}(r.ParseFunc)
+
 		if task.Rule.Trunk == nil {
 			task.Rule.Trunk = make(map[string]*collect.Rule, 0)
 		}
+
 		task.Rule.Trunk[r.Name] = &collect.Rule{
 			ParseFunc: paesrFunc,
 		}

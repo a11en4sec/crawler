@@ -39,7 +39,6 @@ func WithWorkCount(workCount int) Option {
 func WithSeeds(seed []*collect.Task) Option {
 	return func(opts *options) {
 		opts.Seeds = seed
-
 	}
 }
 

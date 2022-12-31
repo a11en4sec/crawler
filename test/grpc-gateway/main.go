@@ -8,6 +8,8 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/registry"
+	"go-micro.dev/v4/server"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	pb "grpc-gateway/proto/greeter"
 	"log"
@@ -22,6 +24,13 @@ func (g *Greeter) Hello(ctx context.Context, req *pb.Request, rsp *pb.Response) 
 }
 
 func main() {
+	// log
+	//plugin := log.NewStdoutPlugin(zapcore.DebugLevel)
+	//logger := log.NewLogger(plugin)
+	//logger.Info("log init end")
+	// set zap global logger
+	//zap.ReplaceGlobals(logger)
+
 	// http proxy
 	go HandleHTTP()
 
@@ -37,6 +46,7 @@ func main() {
 		micro.Address(":9090"),
 		micro.Registry(reg),
 		micro.Name("go.micro.server.worker"),
+		//micro.WrapHandler(logWrapper(logger)),
 	)
 
 	service.Init()
@@ -62,4 +72,19 @@ func HandleHTTP() {
 	}
 
 	http.ListenAndServe(":8080", mux)
+}
+
+// logWrapper 中间件
+func logWrapper(log *zap.Logger) server.HandlerWrapper {
+	return func(fn server.HandlerFunc) server.HandlerFunc {
+		return func(ctx context.Context, req server.Request, rsp interface{}) error {
+			log.Info("recieve request",
+				zap.String("method", req.Method()),
+				zap.String("Service", req.Service()),
+				zap.Reflect("request param:", req.Body()),
+			)
+			err := fn(ctx, req, rsp)
+			return err
+		}
+	}
 }

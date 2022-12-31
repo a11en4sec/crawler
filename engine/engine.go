@@ -19,6 +19,7 @@ func NewEngine(opts ...Option) *Crawler {
 	for _, opt := range opts {
 		opt(&options)
 	}
+
 	e := &Crawler{}
 	e.Visited = make(map[string]bool, 100)
 	e.out = make(chan collect.ParseResult)

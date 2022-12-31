@@ -7,21 +7,24 @@ import (
 	"sync/atomic"
 )
 
-type ProxyFunc func(*http.Request) (*url.URL, error)
+type Func func(*http.Request) (*url.URL, error)
 
-func RoundRobinProxySwitcher(ProxyURLs ...string) (ProxyFunc, error) {
+func RoundRobinProxySwitcher(ProxyURLs ...string) (Func, error) {
 	if len(ProxyURLs) < 1 {
 		return nil, errors.New("proxy URL list is empty")
 	}
+
 	urls := make([]*url.URL, len(ProxyURLs))
 
 	for i, u := range ProxyURLs {
-		parseUrl, err := url.Parse(u)
+		parseURL, err := url.Parse(u)
 		if err != nil {
 			return nil, err
 		}
-		urls[i] = parseUrl
+
+		urls[i] = parseURL
 	}
+
 	return (&roundRobinSwitcher{urls, 0}).GetProxy, nil
 }
 
@@ -34,5 +37,6 @@ type roundRobinSwitcher struct {
 func (r *roundRobinSwitcher) GetProxy(pr *http.Request) (*url.URL, error) {
 	index := atomic.AddUint32(&r.index, 1) - 1
 	u := r.proxyURLs[index%uint32(len(r.proxyURLs))]
+
 	return u, nil
 }

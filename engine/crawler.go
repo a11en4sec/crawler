@@ -1,12 +1,12 @@
 package engine
 
 import (
-	"fmt"
+	"runtime/debug"
+	"sync"
+
 	"github.com/a11en4sec/crawler/collect"
 	"github.com/a11en4sec/crawler/storage"
 	"go.uber.org/zap"
-	"runtime/debug"
-	"sync"
 )
 
 type Crawler struct {
@@ -30,11 +30,11 @@ func (e *Crawler) Run() {
 
 func (e *Crawler) Schedule() {
 	var reqQueue []*collect.Request
+
 	for _, seedTask := range e.Seeds {
 		//seedTask.RootReq.Task = seedTask
-		//seedTask.RootReq.Url = seedTask.Url
+		//seedTask.RootReq.URL = seedTask.URL
 		//reqQueue = append(reqQueue, seedTask.RootReq)
-
 		// 从全局store中取出Task
 		task := Store.Hash[seedTask.Name]
 		// 1 将在main函数中初始化给seed的fetch，赋值给task
@@ -51,6 +51,7 @@ func (e *Crawler) Schedule() {
 			e.Logger.Error("get root failed",
 				zap.Error(err),
 			)
+
 			continue
 		}
 
@@ -58,11 +59,9 @@ func (e *Crawler) Schedule() {
 		for _, req := range rootReqs {
 			req.Task = task
 		}
+
 		reqQueue = append(reqQueue, rootReqs...)
 	}
-	go e.scheduler.Schedule()
-	go e.scheduler.Push(reqQueue...)
-
 	//go func() {
 	//	for {
 	//		var req *collect.Request
@@ -82,6 +81,8 @@ func (e *Crawler) Schedule() {
 	//		}
 	//	}
 	//}()
+	go e.scheduler.Schedule()
+	go e.scheduler.Push(reqQueue...)
 }
 
 func (e *Crawler) CreateWork() {
@@ -91,7 +92,6 @@ func (e *Crawler) CreateWork() {
 				zap.Any("err", err),
 				zap.String("stack", string(debug.Stack())))
 		}
-
 	}()
 
 	for {
@@ -100,40 +100,47 @@ func (e *Crawler) CreateWork() {
 		//判断r是否超过爬取的最高深度
 		if err := req.Check(); err != nil {
 			e.Logger.Error("check failed", zap.Error(err))
+
 			continue
 		}
 
 		// 判断当前请求是否已被访问
 		if !req.Task.Reload && e.HasVisited(req) {
 			e.Logger.Debug("request has visited",
-				zap.String("url:", req.Url),
+				zap.String("url:", req.URL),
 			)
+
 			continue
 		}
+
 		// 没有被访问，存到map中
 		e.StoreVisited(req)
 
 		//body, err := e.Fetcher.Get(req)
 		body, err := req.Fetch()
+
 		//fmt.Println("[++]", string(body))
 		if err != nil {
 			e.Logger.Error("can not fetch ",
 				zap.Error(err),
-				zap.String("url", req.Url),
+				zap.String("url", req.URL),
 			)
+
 			// 请求失败，将请求放到错误map中
 			e.SetFailure(req)
+
 			continue
 		}
 
 		if len(body) < 6000 {
 			e.Logger.Error("can't fetch ",
 				zap.Int("length", len(body)),
-				zap.String("url", req.Url),
+				zap.String("url", req.URL),
 			)
-			fmt.Println("body", string(body))
+
 			// 请求失败，将请求放到错误map中
 			e.SetFailure(req)
+
 			continue
 		}
 
@@ -141,17 +148,20 @@ func (e *Crawler) CreateWork() {
 		// //获取当前任务对应的规则 去处理fetch(req)回来的结果
 		rule := req.Task.Rule.Trunk[req.RuleName]
 
+		ctx := &collect.Context{
+			Body: body,
+			Req:  req,
+		}
+
 		// 处理fetch(req)回来的结果
-		result, err := rule.ParseFunc(&collect.Context{
-			body,
-			req,
-		})
+		result, err := rule.ParseFunc(ctx)
 
 		if err != nil {
 			e.Logger.Error("ParseFunc failed ",
 				zap.Error(err),
-				zap.String("url", req.Url),
+				zap.String("url", req.URL),
 			)
+
 			continue
 		}
 
@@ -165,25 +175,21 @@ func (e *Crawler) CreateWork() {
 }
 
 func (e *Crawler) HandleResult() {
-	for {
-		select {
-		case result := <-e.out:
-			//for _, req := range result.Requesrts {
-			//	e.requestCh <- req
-			//}
-			for _, item := range result.Items {
-				e.Logger.Sugar().Info("get result ", item)
+	for result := range e.out {
+		for _, item := range result.Items {
+			e.Logger.Sugar().Info("get result ", item)
 
-				switch d := item.(type) {
-				case *storage.DataCell:
-					name := d.GetTaskName()
-					task := Store.Hash[name]
+			switch d := item.(type) {
+			case *storage.DataCell:
+				name := d.GetTaskName()
+				task := Store.Hash[name]
 
-					task.Storage.Save(d)
-
+				if err := task.Storage.Save(d); err != nil {
+					e.Logger.Error("")
 				}
-				//e.Logger.Sugar().Info("get result ", item)
 			}
+
+			e.Logger.Sugar().Info("get result ", item)
 		}
 	}
 }
@@ -191,7 +197,9 @@ func (e *Crawler) HandleResult() {
 func (e *Crawler) HasVisited(r *collect.Request) bool {
 	e.VisitedLock.Lock()
 	defer e.VisitedLock.Unlock()
+
 	unique := r.Unique()
+
 	return e.Visited[unique]
 }
 
@@ -214,6 +222,7 @@ func (e *Crawler) SetFailure(req *collect.Request) {
 		delete(e.Visited, unique)
 		e.VisitedLock.Unlock()
 	}
+
 	e.failureLock.Lock()
 	defer e.failureLock.Unlock()
 
@@ -223,5 +232,4 @@ func (e *Crawler) SetFailure(req *collect.Request) {
 		e.failures[req.Unique()] = req
 		e.scheduler.Push(req)
 	}
-	// todo: 失败2次，加载到失败队列中
 }

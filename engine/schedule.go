@@ -42,6 +42,7 @@ func (s *Schedule) Push(reqs ...*collect.Request) {
 
 func (s *Schedule) Pull() *collect.Request {
 	r := <-s.workerCh
+
 	return r
 }
 
@@ -53,15 +54,14 @@ func (s *Schedule) Pull() *collect.Request {
 func (s *Schedule) Schedule() {
 	// 初始化不能放在协程中,否在会丢失请求
 	var req *collect.Request
+
 	var workerCh chan *collect.Request
 	//ch := make(chan *collect.Request)
-
-	//go func() {
+	//go func() {}()
 	for {
 		//var req *collect.Request
 		//var ch chan *collect.Request
 		//ch := make(chan *collect.Request)
-
 		// 初始时，并且优先级队列不为空
 		if req == nil && len(s.priReqQueue) > 0 {
 			req = s.priReqQueue[0]
@@ -90,6 +90,4 @@ func (s *Schedule) Schedule() {
 			workerCh = nil
 		}
 	}
-	//}()
-
 }

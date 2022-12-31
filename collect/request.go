@@ -5,16 +5,17 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"github.com/a11en4sec/crawler/limiter"
-	"github.com/a11en4sec/crawler/storage"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/a11en4sec/crawler/limiter"
+	"github.com/a11en4sec/crawler/storage"
 )
 
 type Property struct {
 	Name   string `json:"name"` // 任务名称，应保证唯一性
-	Url    string `json:"url"`
+	URL    string `json:"url"`
 	Cookie string `json:"cookie"`
 	//WaitTime time.Duration `json:"wait_time"`
 	WaitTime int64 `json:"wait_time"`
@@ -37,7 +38,7 @@ type Task struct {
 // Request 单个请求
 type Request struct {
 	Task     *Task
-	Url      string
+	URL      string
 	Method   string
 	Priority int64
 	Depth    int64
@@ -57,12 +58,14 @@ func (r *Request) Check() error {
 	if r.Depth > r.Task.MaxDepth {
 		return errors.New("max depth limit reached")
 	}
+
 	return nil
 }
 
 // Unique 请求的唯一识别码
 func (r *Request) Unique() string {
-	block := md5.Sum([]byte(r.Url + r.Method))
+	block := md5.Sum([]byte(r.URL + r.Method))
+
 	return hex.EncodeToString(block[:])
 }
 
@@ -70,8 +73,10 @@ func (r *Request) Fetch() ([]byte, error) {
 	if err := r.Task.Limit.Wait(context.Background()); err != nil {
 		return nil, err
 	}
+
 	// 随机休眠，模拟人类行为
 	st := rand.Int63n(r.Task.WaitTime * 1000)
 	time.Sleep(time.Duration(st) * time.Millisecond)
+
 	return r.Task.Fetcher.Get(r)
 }
