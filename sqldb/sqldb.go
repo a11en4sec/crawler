@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	// mysql driver
 	_ "github.com/go-sql-driver/mysql"
 
 	"go.uber.org/zap"

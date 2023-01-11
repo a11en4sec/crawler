@@ -44,6 +44,7 @@ var (
 
 func main() {
 	flag.Parse()
+
 	if *PrintVersion {
 		Printer()
 		os.Exit(0)
@@ -59,6 +60,11 @@ func main() {
 	// load config
 	enc := toml.NewEncoder()
 	cfg, err := config.NewConfig(config.WithReader(json.NewReader(reader.WithEncoder(enc))))
+
+	if err != nil {
+		panic(err)
+	}
+
 	err = cfg.Load(file.NewSource(
 		file.WithPath("config.toml"),
 		source.WithEncoder(enc),
@@ -71,9 +77,11 @@ func main() {
 	// log
 	logText := cfg.Get("logLevel").String("INFO")
 	logLevel, err := zapcore.ParseLevel(logText)
+
 	if err != nil {
 		panic(err)
 	}
+
 	plugin := log.NewStdoutPlugin(logLevel)
 	logger = log.NewLogger(plugin)
 	logger.Info("log init end")
@@ -85,10 +93,13 @@ func main() {
 	proxyURLs := cfg.Get("fetcher", "proxy").StringSlice([]string{})
 	timeout := cfg.Get("fetcher", "timeout").Int(5000)
 	logger.Sugar().Info("proxy list: ", proxyURLs, " timeout: ", timeout)
+
 	if p, err = proxy.RoundRobinProxySwitcher(proxyURLs...); err != nil {
 		logger.Error("RoundRobinProxySwitcher failed", zap.Error(err))
 	}
+
 	_ = p
+
 	var f spider.Fetcher = &collect.BrowserFetch{
 		Timeout: time.Duration(timeout) * time.Millisecond,
 		Logger:  logger,
@@ -103,14 +114,17 @@ func main() {
 		sqlstorage.WithBatchCount(2),
 	); err != nil {
 		logger.Error("create sqlStorage failed", zap.Error(err))
+
 		return
 	}
 
 	// init tasks
 	var tcfg []spider.TaskConfig
+
 	if err := cfg.Get("Tasks").Scan(&tcfg); err != nil {
 		logger.Error("init seed tasks", zap.Error(err))
 	}
+
 	seeds := ParseTaskConfig(logger, f, storage, tcfg)
 
 	s := engine.NewEngine(
@@ -127,6 +141,7 @@ func main() {
 
 func ParseTaskConfig(logger *zap.Logger, f spider.Fetcher, s spider.Storage, cfgs []spider.TaskConfig) []*spider.Task {
 	tasks := make([]*spider.Task, 0, 1000)
+
 	for _, cfg := range cfgs {
 		t := spider.NewTask(
 			spider.WithName(cfg.Name),
@@ -145,12 +160,14 @@ func ParseTaskConfig(logger *zap.Logger, f spider.Fetcher, s spider.Storage, cfg
 		}
 
 		var limits []limiter.RateLimiter
+
 		if len(cfg.Limits) > 0 {
 			for _, lcfg := range cfg.Limits {
 				// speed limiter
 				l := rate.NewLimiter(limiter.Per(lcfg.EventCount, time.Duration(lcfg.EventDur)*time.Second), 1)
 				limits = append(limits, l)
 			}
+
 			multiLimiter := limiter.Multi(limits...)
 			t.Limit = multiLimiter
 		}
@@ -159,8 +176,10 @@ func ParseTaskConfig(logger *zap.Logger, f spider.Fetcher, s spider.Storage, cfg
 		case "browser":
 			t.Fetcher = f
 		}
+
 		tasks = append(tasks, t)
 	}
+
 	return tasks
 }
 
@@ -170,12 +189,15 @@ func GetVersion() string {
 		if len(h) > 7 {
 			h = h[:7]
 		}
+
 		return fmt.Sprintf("%s-%s", Version, h)
 	}
+
 	return Version
 }
 
 // Printer print build version
+//nolint
 func Printer() {
 	fmt.Println("Version:          ", GetVersion())
 	fmt.Println("Git Branch:       ", GitBranch)

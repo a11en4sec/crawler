@@ -112,9 +112,13 @@ func (s *SQLStorage) Flush() error {
 	}()
 
 	args := make([]interface{}, 0)
+
 	var ruleName string
+
 	var taskName string
+
 	var ok bool
+
 	// dataDocker满了
 	for _, datacell := range s.dataDocker {
 		if ruleName, ok = datacell.Data["Rule"].(string); !ok {
@@ -153,6 +157,7 @@ func (s *SQLStorage) Flush() error {
 		if v, ok := datacell.Data["URL"].(string); ok {
 			value = append(value, v)
 		}
+
 		if v, ok := datacell.Data["Time"].(string); ok {
 			value = append(value, v)
 		}
