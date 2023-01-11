@@ -1,21 +1,23 @@
 package engine
 
-import "github.com/a11en4sec/crawler/collect"
+import (
+	"github.com/a11en4sec/crawler/spider"
+)
 
 type CrawlerStore struct {
-	list []*collect.Task
-	Hash map[string]*collect.Task
+	list []*spider.Task
+	Hash map[string]*spider.Task
 }
 
-func (c *CrawlerStore) Add(task *collect.Task) {
+func (c *CrawlerStore) Add(task *spider.Task) {
 	c.Hash[task.Name] = task
 	c.list = append(c.list, task)
 }
 
 // Store 全局爬虫任务实例
 var Store = &CrawlerStore{
-	list: []*collect.Task{},
-	Hash: map[string]*collect.Task{},
+	list: []*spider.Task{},
+	Hash: map[string]*spider.Task{},
 }
 
 func GetFields(taskName string, ruleName string) []string {

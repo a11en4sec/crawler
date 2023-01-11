@@ -1,16 +1,16 @@
 package engine
 
 import (
-	"github.com/a11en4sec/crawler/collect"
+	"github.com/a11en4sec/crawler/spider"
 	"github.com/robertkrimen/otto"
 )
 
 // AddJsReqs 用于动态规则添加请求。
-func AddJsReqs(jreqs []map[string]interface{}) []*collect.Request {
-	reqs := make([]*collect.Request, 0)
+func AddJsReqs(jreqs []map[string]interface{}) []*spider.Request {
+	reqs := make([]*spider.Request, 0)
 
 	for _, jreq := range jreqs {
-		req := &collect.Request{}
+		req := &spider.Request{}
 		u, ok := jreq["URL"].(string)
 
 		if !ok {
@@ -28,9 +28,9 @@ func AddJsReqs(jreqs []map[string]interface{}) []*collect.Request {
 }
 
 // AddJsReq 用于动态规则添加请求。
-func AddJsReq(jreq map[string]interface{}) []*collect.Request {
-	reqs := make([]*collect.Request, 0)
-	req := &collect.Request{}
+func AddJsReq(jreq map[string]interface{}) []*spider.Request {
+	reqs := make([]*spider.Request, 0)
+	req := &spider.Request{}
 	u, ok := jreq["URL"].(string)
 
 	if !ok {
@@ -46,12 +46,12 @@ func AddJsReq(jreq map[string]interface{}) []*collect.Request {
 	return reqs
 }
 
-func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
-	task := &collect.Task{
-		Property: m.Property,
+func (c *CrawlerStore) AddJSTask(m *spider.TaskModle) {
+	task := &spider.Task{
+		//Property: m.Property,
 	}
 
-	task.Rule.Root = func() ([]*collect.Request, error) {
+	task.Rule.Root = func() ([]*spider.Request, error) {
 		vm := otto.New()
 		if err := vm.Set("AddJsReq", AddJsReqs); err != nil {
 			return nil, err
@@ -69,44 +69,44 @@ func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
 			return nil, err
 		}
 
-		return e.([]*collect.Request), nil
+		return e.([]*spider.Request), nil
 	}
 
 	for _, r := range m.Rules {
 		// 将js编写的字符串，转成go代码，并执行
-		paesrFunc := func(parse string) func(ctx *collect.Context) (collect.ParseResult, error) {
-			return func(ctx *collect.Context) (collect.ParseResult, error) {
+		paesrFunc := func(parse string) func(ctx *spider.Context) (spider.ParseResult, error) {
+			return func(ctx *spider.Context) (spider.ParseResult, error) {
 				vm := otto.New()
 
 				if err := vm.Set("ctx", ctx); err != nil {
-					return collect.ParseResult{}, err
+					return spider.ParseResult{}, err
 				}
 
 				v, err := vm.Eval(parse)
 
 				if err != nil {
-					return collect.ParseResult{}, err
+					return spider.ParseResult{}, err
 				}
 
 				e, err := v.Export()
 
 				if err != nil {
-					return collect.ParseResult{}, err
+					return spider.ParseResult{}, err
 				}
 
 				if e == nil {
-					return collect.ParseResult{}, err
+					return spider.ParseResult{}, err
 				}
 
-				return e.(collect.ParseResult), err
+				return e.(spider.ParseResult), err
 			}
 		}(r.ParseFunc)
 
 		if task.Rule.Trunk == nil {
-			task.Rule.Trunk = make(map[string]*collect.Rule, 0)
+			task.Rule.Trunk = make(map[string]*spider.Rule, 0)
 		}
 
-		task.Rule.Trunk[r.Name] = &collect.Rule{
+		task.Rule.Trunk[r.Name] = &spider.Rule{
 			ParseFunc: paesrFunc,
 		}
 	}

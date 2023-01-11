@@ -1,4 +1,4 @@
-package storage
+package spider
 
 type Storage interface {
 	Save(datas ...*DataCell) error
@@ -6,6 +6,7 @@ type Storage interface {
 
 // DataCell 是对数据的抽象
 type DataCell struct {
+	Task *Task
 	Data map[string]interface{}
 	// Data["Task"] 当前的任务名
 	// Data["Rule"] 当前的规则名

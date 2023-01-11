@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a11en4sec/crawler/spider"
+
 	"github.com/a11en4sec/crawler/extensions"
 	"github.com/a11en4sec/crawler/proxy"
 	"go.uber.org/zap"
@@ -20,14 +22,9 @@ import (
 	"golang.org/x/text/transform"
 )
 
-type Fetcher interface {
-	Get(url *Request) ([]byte, error)
-}
+type BaseFetch struct{}
 
-type BaseFetch struct {
-}
-
-func (BaseFetch) Get(req *Request) ([]byte, error) {
+func (BaseFetch) Get(req *spider.Request) ([]byte, error) {
 	client := &http.Client{}
 	ctx := context.Background()
 	r, err := http.NewRequestWithContext(ctx, http.MethodGet, req.URL, nil)
@@ -71,7 +68,7 @@ type BrowserFetch struct {
 }
 
 // Get 模拟浏览器访问
-func (b BrowserFetch) Get(request *Request) ([]byte, error) {
+func (b BrowserFetch) Get(request *spider.Request) ([]byte, error) {
 	client := &http.Client{
 		Timeout: b.Timeout,
 	}

@@ -4,16 +4,16 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/a11en4sec/crawler/collect"
-	"github.com/a11en4sec/crawler/storage"
+	"github.com/a11en4sec/crawler/spider"
+
 	"go.uber.org/zap"
 )
 
 type Crawler struct {
-	out         chan collect.ParseResult
+	out         chan spider.ParseResult
 	Visited     map[string]bool // keys is md5(URL + method)
 	VisitedLock sync.Mutex
-	failures    map[string]*collect.Request // 失败请求id -> 失败请求
+	failures    map[string]*spider.Request // 失败请求id -> 失败请求
 	failureLock sync.Mutex
 	options
 }
@@ -29,23 +29,25 @@ func (e *Crawler) Run() {
 }
 
 func (e *Crawler) Schedule() {
-	var reqQueue []*collect.Request
+	var reqQueue []*spider.Request
 
-	for _, seedTask := range e.Seeds {
-		//seedTask.RootReq.Task = seedTask
-		//seedTask.RootReq.URL = seedTask.URL
-		//reqQueue = append(reqQueue, seedTask.RootReq)
+	for _, task := range e.Seeds {
 		// 从全局store中取出Task
-		task := Store.Hash[seedTask.Name]
+		t, ok := Store.Hash[task.Name]
+		if !ok {
+			e.Logger.Error("can not find preset tasks", zap.String("task name", task.Name))
+
+			continue
+		}
 		// 1 将在main函数中初始化给seed的fetch，赋值给task
-		task.Fetcher = seedTask.Fetcher
+		//task.Fetcher = task.Fetcher
 		// 2 将在main函数中初始化给seed的storage，赋值给task
-		task.Storage = seedTask.Storage
-
+		//task.Storage = task.Storage
 		// 3 将在main函数中初始化给seed的limit，赋值给task
-		task.Limit = seedTask.Limit
+		//task.Limit = task.Limit
 
-		// 取出Task的根，根中存储的是种子url的列表
+		task.Rule = t.Rule
+		// 取出Task的根，根中存储的是种子request的列表
 		rootReqs, err := task.Rule.Root()
 		if err != nil {
 			e.Logger.Error("get root failed",
@@ -148,7 +150,7 @@ func (e *Crawler) CreateWork() {
 		// //获取当前任务对应的规则 去处理fetch(req)回来的结果
 		rule := req.Task.Rule.Trunk[req.RuleName]
 
-		ctx := &collect.Context{
+		ctx := &spider.Context{
 			Body: body,
 			Req:  req,
 		}
@@ -180,11 +182,14 @@ func (e *Crawler) HandleResult() {
 			e.Logger.Sugar().Info("get result ", item)
 
 			switch d := item.(type) {
-			case *storage.DataCell:
-				name := d.GetTaskName()
-				task := Store.Hash[name]
-
-				if err := task.Storage.Save(d); err != nil {
+			case *spider.DataCell:
+				//name := d.GetTaskName()
+				//task := Store.Hash[name]
+				//
+				//if err := task.Storage.Save(d); err != nil {
+				//	e.Logger.Error("存储失败")
+				//}
+				if err := d.Task.Storage.Save(d); err != nil {
 					e.Logger.Error("")
 				}
 			}
@@ -194,7 +199,7 @@ func (e *Crawler) HandleResult() {
 	}
 }
 
-func (e *Crawler) HasVisited(r *collect.Request) bool {
+func (e *Crawler) HasVisited(r *spider.Request) bool {
 	e.VisitedLock.Lock()
 	defer e.VisitedLock.Unlock()
 
@@ -203,7 +208,7 @@ func (e *Crawler) HasVisited(r *collect.Request) bool {
 	return e.Visited[unique]
 }
 
-func (e *Crawler) StoreVisited(reqs ...*collect.Request) {
+func (e *Crawler) StoreVisited(reqs ...*spider.Request) {
 	e.VisitedLock.Lock()
 	defer e.VisitedLock.Unlock()
 
@@ -213,7 +218,7 @@ func (e *Crawler) StoreVisited(reqs ...*collect.Request) {
 	}
 }
 
-func (e *Crawler) SetFailure(req *collect.Request) {
+func (e *Crawler) SetFailure(req *spider.Request) {
 	// 没有被重新爬取过,第一次fetch失败
 	if !req.Task.Reload {
 		e.VisitedLock.Lock()

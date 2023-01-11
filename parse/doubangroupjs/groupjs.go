@@ -1,11 +1,11 @@
 package doubangroupjs
 
 import (
-	"github.com/a11en4sec/crawler/collect"
+	"github.com/a11en4sec/crawler/spider"
 )
 
-var DoubangroupJSTask *collect.TaskModle = &collect.TaskModle{
-	Property: collect.Property{
+var DoubangroupJSTask *spider.TaskModle = &spider.TaskModle{
+	Property: spider.Property{
 		Name:     "js_find_douban_sun_room",
 		WaitTime: 2,
 		MaxDepth: 5,
@@ -27,7 +27,7 @@ var DoubangroupJSTask *collect.TaskModle = &collect.TaskModle{
 		console.log(arr[0].URL);
 		AddJsReq(arr);
 			`,
-	Rules: []collect.RuleModle{
+	Rules: []spider.RuleModle{
 		{
 			Name: "解析网站URL",
 			ParseFunc: `

@@ -2,18 +2,20 @@ package sqlstorage
 
 import (
 	"encoding/json"
+	"errors"
+
+	"github.com/a11en4sec/crawler/spider"
 
 	"github.com/a11en4sec/crawler/engine"
 	"github.com/a11en4sec/crawler/sqldb"
-	"github.com/a11en4sec/crawler/storage"
 	"go.uber.org/zap"
 )
 
 type SQLStorage struct {
-	dataDocker  []*storage.DataCell //分批输出结果缓存
-	columnNames []sqldb.Field       //标题字段
-	db          sqldb.DBer          //接口
-	Table       map[string]struct{}
+	dataDocker []*spider.DataCell //分批输出结果缓存
+	//columnNames []sqldb.Field      //标题字段
+	db    sqldb.DBer //接口
+	Table map[string]struct{}
 	options
 }
 
@@ -24,13 +26,9 @@ func New(opts ...Option) (*SQLStorage, error) {
 		opt(&options)
 	}
 
-	s := &SQLStorage{
-		dataDocker:  nil,
-		columnNames: nil,
-		db:          nil,
-		Table:       make(map[string]struct{}),
-		options:     options,
-	}
+	s := &SQLStorage{}
+	s.options = options
+	s.Table = make(map[string]struct{})
 
 	var err error
 	// s.db 是接口sqldb.DBer, sqldb.New返回是*Sqldb,实现了接口DBer,所以可以赋值
@@ -44,7 +42,7 @@ func New(opts ...Option) (*SQLStorage, error) {
 }
 
 // Save 实现storage
-func (s *SQLStorage) Save(dataCells ...*storage.DataCell) error {
+func (s *SQLStorage) Save(dataCells ...*spider.DataCell) error {
 	for _, cell := range dataCells {
 		name := cell.GetTableName()
 		if _, ok := s.Table[name]; !ok {
@@ -62,6 +60,8 @@ func (s *SQLStorage) Save(dataCells ...*storage.DataCell) error {
 
 			if err != nil {
 				s.logger.Error("create table failed", zap.Error(err))
+
+				continue
 			}
 			// 表已经创建了，此处赋一个空结构体
 			s.Table[name] = struct{}{}
@@ -81,7 +81,7 @@ func (s *SQLStorage) Save(dataCells ...*storage.DataCell) error {
 	return nil
 }
 
-func getFields(cell *storage.DataCell) []sqldb.Field {
+func getFields(cell *spider.DataCell) []sqldb.Field {
 	taskName := cell.Data["Task"].(string)
 	ruleName := cell.Data["Rule"].(string)
 	fields := engine.GetFields(taskName, ruleName)
@@ -112,10 +112,18 @@ func (s *SQLStorage) Flush() error {
 	}()
 
 	args := make([]interface{}, 0)
+	var ruleName string
+	var taskName string
+	var ok bool
 	// dataDocker满了
 	for _, datacell := range s.dataDocker {
-		ruleName := datacell.Data["Rule"].(string)
-		taskName := datacell.Data["Task"].(string)
+		if ruleName, ok = datacell.Data["Rule"].(string); !ok {
+			return errors.New("no rule field")
+		}
+
+		if taskName, ok = datacell.Data["Task"].(string); !ok {
+			return errors.New("no task field")
+		}
 		// 用于获取当前数据的表字段与字段类型
 		fields := engine.GetFields(taskName, ruleName)
 
@@ -141,7 +149,14 @@ func (s *SQLStorage) Flush() error {
 			}
 		}
 
-		value = append(value, datacell.Data["URL"].(string), datacell.Data["Time"].(string))
+		//value = append(value, datacell.Data["URL"].(string), datacell.Data["Time"].(string))
+		if v, ok := datacell.Data["URL"].(string); ok {
+			value = append(value, v)
+		}
+		if v, ok := datacell.Data["Time"].(string); ok {
+			value = append(value, v)
+		}
+
 		for _, v := range value {
 			args = append(args, v)
 		}

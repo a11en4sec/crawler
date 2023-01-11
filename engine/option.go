@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"github.com/a11en4sec/crawler/collect"
+	"github.com/a11en4sec/crawler/spider"
 	"go.uber.org/zap"
 )
 
@@ -9,9 +9,9 @@ type Option func(opt *options)
 
 type options struct {
 	WorkCount int
-	Fetcher   collect.Fetcher
+	Fetcher   spider.Fetcher
 	Logger    *zap.Logger
-	Seeds     []*collect.Task
+	Seeds     []*spider.Task
 	scheduler Scheduler
 }
 
@@ -25,7 +25,7 @@ func WithLogger(logger *zap.Logger) Option {
 	}
 }
 
-func WithFetcher(fetcher collect.Fetcher) Option {
+func WithFetcher(fetcher spider.Fetcher) Option {
 	return func(opts *options) {
 		opts.Fetcher = fetcher
 	}
@@ -36,7 +36,7 @@ func WithWorkCount(workCount int) Option {
 	}
 }
 
-func WithSeeds(seed []*collect.Task) Option {
+func WithSeeds(seed []*spider.Task) Option {
 	return func(opts *options) {
 		opts.Seeds = seed
 	}
