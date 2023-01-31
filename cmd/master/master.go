@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-micro/plugins/v4/registry/etcd"
+
+	"github.com/spf13/cobra"
+
 	"github.com/a11en4sec/crawler/log"
 	"github.com/a11en4sec/crawler/proto/greeter"
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
-	"github.com/go-micro/plugins/v4/registry/etcd"
 	"github.com/go-micro/plugins/v4/server/grpc"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go-micro.dev/v4"
@@ -27,7 +30,42 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+var MasterCmd = &cobra.Command{
+	Use:   "master",
+	Short: "run master service.",
+	Long:  "run master service.",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		Run()
+	},
+}
+
+var PProfListenAddress string
+var masterID string
+var HTTPListenAddress string
+var GRPCListenAddress string
+
+func init() {
+	// 给子命令master 设置flag，./main master [--pprof=9981 | --id=1 | --http=8081 | --grpc=9091]
+	MasterCmd.Flags().StringVar(
+		&PProfListenAddress, "pprof", ":9981", "set pprof address")
+	MasterCmd.Flags().StringVar(
+		&masterID, "id", "1", "set master id")
+	MasterCmd.Flags().StringVar(
+		&HTTPListenAddress, "http", ":8081", "set HTTP listen address")
+	MasterCmd.Flags().StringVar(
+		&GRPCListenAddress, "grpc", ":9091", "set GRPC listen address")
+
+}
+
 func Run() {
+	// start pprof
+	go func() {
+		if err := http.ListenAndServe(PProfListenAddress, nil); err != nil {
+			panic(err)
+		}
+	}()
+
 	var (
 		err    error
 		logger *zap.Logger
@@ -67,31 +105,33 @@ func Run() {
 	}
 	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
 
+	reg := etcd.NewRegistry(registry.Addrs(sconfig.RegistryAddress))
+
 	// start http proxy to GRPC
 	go RunHTTPServer(sconfig)
 
 	// start grpc server
-	RunGRPCServer(logger, sconfig)
+	RunGRPCServer(logger, reg, sconfig)
 }
 
 type ServerConfig struct {
-	GRPCListenAddress string
-	HTTPListenAddress string
-	ID                string
-	RegistryAddress   string
-	RegisterTTL       int
-	RegisterInterval  int
-	Name              string
-	ClientTimeOut     int
+	//GRPCListenAddress string
+	//HTTPListenAddress string
+	//ID               string
+	RegistryAddress  string
+	RegisterTTL      int
+	RegisterInterval int
+	Name             string
+	ClientTimeOut    int
 }
 
-func RunGRPCServer(logger *zap.Logger, cfg ServerConfig) {
-	reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
+func RunGRPCServer(logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
+	//reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
 	service := micro.NewService(
 		micro.Server(grpc.NewServer(
-			server.Id(cfg.ID),
+			server.Id(masterID),
 		)),
-		micro.Address(cfg.GRPCListenAddress),
+		micro.Address(GRPCListenAddress),
 		micro.Registry(reg),
 		micro.RegisterTTL(time.Duration(cfg.RegisterTTL)*time.Second),
 		micro.RegisterInterval(time.Duration(cfg.RegisterInterval)*time.Second),
@@ -136,11 +176,11 @@ func RunHTTPServer(cfg ServerConfig) {
 		grpc2.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, cfg.GRPCListenAddress, opts); err != nil {
+	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed")
 	}
-	zap.S().Debugf("start master http server listening on %v proxy to grpc server;%v", cfg.HTTPListenAddress, cfg.GRPCListenAddress)
-	if err := http.ListenAndServe(cfg.HTTPListenAddress, mux); err != nil {
+	zap.S().Debugf("start master http server listening on %v proxy to grpc server;%v", HTTPListenAddress, GRPCListenAddress)
+	if err := http.ListenAndServe(HTTPListenAddress, mux); err != nil {
 		zap.L().Fatal("http listenAndServe failed")
 	}
 }

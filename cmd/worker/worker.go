@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/a11en4sec/crawler/collect"
 	"github.com/a11en4sec/crawler/engine"
 	"github.com/a11en4sec/crawler/limiter"
@@ -32,6 +34,46 @@ import (
 	grpc2 "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+var ServiceName string = "go.micro.server.worker"
+
+var WorkerCmd = &cobra.Command{
+	Use:   "worker",
+	Short: "run worker service.",
+	Long:  "run worker service.",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		Run()
+	},
+}
+
+func init() {
+	WorkerCmd.Flags().StringVar(
+		&workerID, "id", "", "set worker id")
+
+	WorkerCmd.Flags().StringVar(
+		&podIP, "podip", "", "set worker id")
+
+	WorkerCmd.Flags().StringVar(
+		&HTTPListenAddress, "http", ":8080", "set HTTP listen address")
+
+	WorkerCmd.Flags().StringVar(
+		&GRPCListenAddress, "grpc", ":9090", "set GRPC listen address")
+
+	WorkerCmd.Flags().StringVar(
+		&PProfListenAddress, "pprof", ":9981", "set pprof address")
+
+	WorkerCmd.Flags().BoolVar(
+		&cluster, "cluster", true, "run mode")
+
+}
+
+var cluster bool
+var workerID string
+var HTTPListenAddress string
+var GRPCListenAddress string
+var PProfListenAddress string
+var podIP string
 
 func Run() {
 	var (
