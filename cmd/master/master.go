@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/a11en4sec/crawler/master"
+
 	"github.com/go-micro/plugins/v4/registry/etcd"
 
 	"github.com/spf13/cobra"
@@ -106,6 +108,14 @@ func Run() {
 	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
 
 	reg := etcd.NewRegistry(registry.Addrs(sconfig.RegistryAddress))
+
+	master.New(
+		masterID,
+		master.WithLogger(logger.Named("master")),
+		master.WithGRPCAddress(GRPCListenAddress),
+		master.WithRegistryUrl(sconfig.RegistryAddress),
+		master.WithRegistry(reg),
+	)
 
 	// start http proxy to GRPC
 	go RunHTTPServer(sconfig)
