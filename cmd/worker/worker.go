@@ -76,6 +76,13 @@ var PProfListenAddress string
 var podIP string
 
 func Run() {
+	// 开启性能监控
+	go func() {
+		if err := http.ListenAndServe(PProfListenAddress, nil); err != nil {
+			panic(err)
+		}
+	}()
+
 	var (
 		err     error
 		logger  *zap.Logger

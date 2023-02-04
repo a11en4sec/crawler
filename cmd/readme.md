@@ -1,3 +1,24 @@
+# 1 启动master
+```shell
+./main master --id=1 --http=:8081 --grpc=:9091 --pprof=:9981     
+./main master --id=2 --http=:8082 --grpc=:9092 --pprof=:9982     
+./main master --id=3 --http=:8083 --grpc=:9093 --pprof=:9983     
+
+```
+# 2 启动worker
+```shell
+./main worker --id=2 --http=:11801 --grpc=:11901 --pprof=:11001
+./main worker --id=2 --http=:11802 --grpc=:11902 --pprof=:11002 
+./main worker --id=2 --http=:11803 --grpc=:11903 --pprof=:11003
+```
+## 3 通过接口增加资源
+```shell
+curl -H "content-type: application/json" -d '{"id":"zjx","name": "task-test-4"}' http://localhost:8081/crawler/resource
+
+{"id":"go.micro.server.worker-2", "Address":"192.168.0.107:9089"}
+```
+
+# 信息
 ## 增加worker时
 ```json
 {
