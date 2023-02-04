@@ -49,7 +49,7 @@ var WorkerCmd = &cobra.Command{
 
 func init() {
 	WorkerCmd.Flags().StringVar(
-		&workerID, "id", "", "set worker id")
+		&workerID, "id", "1", "set worker id")
 
 	WorkerCmd.Flags().StringVar(
 		&podIP, "podip", "", "set worker id")
@@ -164,24 +164,25 @@ func Run() {
 }
 
 type ServerConfig struct {
-	GRPCListenAddress string
-	HTTPListenAddress string
-	ID                string
-	RegistryAddress   string
-	RegisterTTL       int
-	RegisterInterval  int
-	Name              string
-	ClientTimeOut     int
+	//GRPCListenAddress string
+	//HTTPListenAddress string
+	//ID               string
+	RegistryAddress  string
+	RegisterTTL      int
+	RegisterInterval int
+	Name             string
+	ClientTimeOut    int
 }
 
+// RunGRPCServer 启动服务，并注册到etcd中
 func RunGRPCServer(logger *zap.Logger, cfg ServerConfig) {
 	reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
 	service := micro.NewService(
 		micro.Server(grpc.NewServer(
-			server.Id(cfg.ID),
+			server.Id(workerID),
 		)),
-		micro.Address(cfg.GRPCListenAddress),
-		micro.Registry(reg),
+		micro.Address(GRPCListenAddress),
+		micro.Registry(reg), // 将服务注册到etcd中
 		micro.RegisterTTL(time.Duration(cfg.RegisterTTL)*time.Second),
 		micro.RegisterInterval(time.Duration(cfg.RegisterInterval)*time.Second),
 		micro.WrapHandler(logWrapper(logger)),
@@ -198,11 +199,11 @@ func RunGRPCServer(logger *zap.Logger, cfg ServerConfig) {
 	service.Init()
 
 	if err := greeter.RegisterGreeterHandler(service.Server(), new(Greeter)); err != nil {
-		logger.Fatal("register handler failed")
+		logger.Fatal("register handler failed", zap.Error(err))
 	}
 
 	if err := service.Run(); err != nil {
-		logger.Fatal("grpc server stop")
+		logger.Fatal("grpc server stop", zap.Error(err))
 	}
 }
 
@@ -223,12 +224,12 @@ func RunHTTPServer(cfg ServerConfig) {
 	mux := runtime.NewServeMux()
 	opts := []grpc2.DialOption{grpc2.WithTransportCredentials(insecure.NewCredentials())}
 
-	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, cfg.GRPCListenAddress, opts); err != nil {
-		zap.L().Fatal("Register backend grpc server endpoint failed")
+	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
+		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
 	}
-	zap.S().Debugf("start http server listening on %v proxy to grpc server;%v", cfg.HTTPListenAddress, cfg.GRPCListenAddress)
-	if err := http.ListenAndServe(cfg.HTTPListenAddress, mux); err != nil {
-		zap.L().Fatal("http listenAndServe failed")
+	zap.S().Debugf("start http server listening on %v proxy to grpc server;%v", HTTPListenAddress, GRPCListenAddress)
+	if err := http.ListenAndServe(HTTPListenAddress, mux); err != nil {
+		zap.L().Fatal("http listenAndServe failed", zap.Error(err))
 	}
 }
 

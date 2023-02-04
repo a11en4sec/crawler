@@ -3,11 +3,11 @@ module github.com/a11en4sec/crawler
 go 1.18
 
 require (
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/go-micro/plugins/v4/config/encoder/toml v1.2.0
 	github.com/go-micro/plugins/v4/registry/etcd v1.2.0
 	github.com/go-micro/plugins/v4/server/grpc v1.2.0
 	github.com/go-sql-driver/mysql v1.7.0
-	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.0
 	github.com/panjf2000/ants/v2 v2.6.0
 	github.com/robertkrimen/otto v0.2.1
@@ -15,6 +15,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/yuin/gopher-lua v0.0.0-20220504180219-658193537a64
 	go-micro.dev/v4 v4.9.0
+	go.etcd.io/etcd/client/v3 v3.5.2
 	go.uber.org/zap v1.24.0
 	golang.org/x/net v0.3.0
 	golang.org/x/text v0.5.0
@@ -70,7 +71,6 @@ require (
 	github.com/xanzy/ssh-agent v0.3.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.2 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2 // indirect
-	go.etcd.io/etcd/client/v3 v3.5.2 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
