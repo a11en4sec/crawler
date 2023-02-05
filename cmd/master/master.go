@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/a11en4sec/crawler/proto/crawler"
+	grpccli "github.com/go-micro/plugins/v4/client/grpc"
+
+	//"github.com/a11en4sec/crawler/proto/crawler"
+	proto "github.com/a11en4sec/crawler/proto/crawler"
 
 	"github.com/a11en4sec/crawler/cmd/worker"
 	"github.com/a11en4sec/crawler/spider"
@@ -154,7 +157,7 @@ type ServerConfig struct {
 	ClientTimeOut    int
 }
 
-func RunGRPCServer(MasterService *master.Master, logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
+func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
 	//reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
 	service := micro.NewService(
 		micro.Server(grpc.NewServer(
@@ -166,7 +169,12 @@ func RunGRPCServer(MasterService *master.Master, logger *zap.Logger, reg registr
 		micro.RegisterInterval(time.Duration(cfg.RegisterInterval)*time.Second),
 		micro.WrapHandler(logWrapper(logger)),
 		micro.Name(cfg.Name),
+		micro.Client(grpccli.NewClient()),
 	)
+
+	cl := proto.NewCrawlerMasterService(cfg.Name, service.Client())
+
+	m.SetForwardCli(cl)
 
 	// 设置micro 客户端默认超时时间为10秒钟
 	if err := service.Client().Init(client.RequestTimeout(time.Duration(cfg.ClientTimeOut) * time.Second)); err != nil {
@@ -182,7 +190,7 @@ func RunGRPCServer(MasterService *master.Master, logger *zap.Logger, reg registr
 	}
 
 	// 注册为grpc服务2
-	if err := crawler.RegisterCrawlerMasterHandler(service.Server(), MasterService); err != nil {
+	if err := proto.RegisterCrawlerMasterHandler(service.Server(), m); err != nil {
 		logger.Fatal("register handler failed", zap.Error(err))
 	}
 	if err := service.Run(); err != nil {
@@ -214,7 +222,7 @@ func RunHTTPServer(cfg ServerConfig) {
 	//	zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
 	//}
 
-	if err := crawler.RegisterCrawlerMasterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
+	if err := proto.RegisterCrawlerMasterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
 	}
 

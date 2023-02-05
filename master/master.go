@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	proto "github.com/a11en4sec/crawler/proto/crawler"
+
 	"github.com/bwmarrin/snowflake"
 
 	"github.com/a11en4sec/crawler/cmd/worker"
@@ -30,14 +32,20 @@ const (
 )
 
 type Master struct {
-	ID        string
-	ready     int32
-	leaderID  string
-	workNodes map[string]*NodeSpec     // master中存储所有的work节点
-	resources map[string]*ResourceSpec // master中存储的资源
-	IDGen     *snowflake.Node
-	etcdCli   *clientv3.Client
+	ID         string
+	ready      int32
+	leaderID   string
+	workNodes  map[string]*NodeSpec     // master中存储所有的work节点
+	resources  map[string]*ResourceSpec // master中存储的资源
+	IDGen      *snowflake.Node
+	etcdCli    *clientv3.Client
+	forwardCli proto.CrawlerMasterService
 	options
+}
+
+// SetForwardCli 将生成的 GRPC client 注入到了 Master 结构体中
+func (m *Master) SetForwardCli(forwardCli proto.CrawlerMasterService) {
+	m.forwardCli = forwardCli
 }
 
 type Command int
@@ -144,6 +152,9 @@ func (m *Master) Campaign() {
 	select {
 	case resp := <-leaderChange:
 		m.logger.Info("watch leader change", zap.String("leader:", string(resp.Kvs[0].Value)))
+		// 所有 Master 节点要在 Leader 发生变更时，将当前最新的 Leader 地址保存到 leaderID 中
+		m.leaderID = string(resp.Kvs[0].Value)
+
 	}
 	workerNodeChange := m.WatchWorker()
 

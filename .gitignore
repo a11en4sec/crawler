@@ -1,1 +1,7 @@
 .idea
+*.html
+*.txt
+main
+*.out
+*.test
+testdata
