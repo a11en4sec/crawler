@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +41,7 @@ type Master struct {
 	IDGen      *snowflake.Node
 	etcdCli    *clientv3.Client
 	forwardCli proto.CrawlerMasterService
+	rlock      sync.Mutex
 	options
 }
 
@@ -260,6 +262,10 @@ func (m *Master) reAssign() {
 	// 发现有资源还没有分配节点时，将再次尝试将资源分配到 Worker 中。
 	// 如果发现资源都已经分配给了对应的 Worker，它就会查看当前节点是否存活。
 	// 如果当前节点已经不存在了，就将该资源分配给其他的节点。
+
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
+
 	for _, r := range m.resources {
 		if r.AssignedNode == "" {
 			rs = append(rs, r)
@@ -277,7 +283,13 @@ func (m *Master) reAssign() {
 		}
 	}
 
-	m.AddResources(rs)
+	//m.AddResources(rs)
+	for _, r := range rs {
+		_, err := m.addResources(r)
+		if err != nil {
+			m.logger.Error("addResources failed", zap.Error(err))
+		}
+	}
 }
 
 func getNodeID(assigned string) (string, error) {
@@ -338,6 +350,8 @@ func (m *Master) updateWorkNodes() {
 	}
 
 	nodes := make(map[string]*NodeSpec)
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
 	if len(services) > 0 {
 		for _, spec := range services[0].Nodes {
 			nodes[spec.Id] = &NodeSpec{
@@ -454,6 +468,10 @@ func (m *Master) loadResource() error {
 	}
 
 	resources := make(map[string]*ResourceSpec)
+
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
+
 	for _, kv := range resp.Kvs {
 		r, err := decode(kv.Value)
 		if err == nil && r != nil {

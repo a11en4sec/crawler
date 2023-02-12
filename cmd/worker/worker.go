@@ -48,6 +48,9 @@ var WorkerCmd = &cobra.Command{
 }
 
 func init() {
+	WorkerCmd.Flags().BoolVar(
+		&cluster, "cluster", true, "run mode")
+
 	WorkerCmd.Flags().StringVar(
 		&workerID, "id", "1", "set worker id")
 

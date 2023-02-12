@@ -12,6 +12,9 @@ import (
 )
 
 func (m *Master) DeleteResource(ctx context.Context, spec *proto.ResourceSpec, empty *empty.Empty) error {
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
+
 	r, ok := m.resources[spec.Name]
 
 	if !ok {
@@ -48,6 +51,8 @@ func (m *Master) AddResource(ctx context.Context, req *proto.ResourceSpec, resp 
 		return err
 	}
 
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
 	nodeSpec, err := m.addResources(&ResourceSpec{Name: req.Name})
 	if nodeSpec != nil {
 		resp.Id = nodeSpec.Node.Id
