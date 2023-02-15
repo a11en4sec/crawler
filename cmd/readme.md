@@ -2,7 +2,7 @@
 ```shell
 ./main master --id=1 --http=:8081 --grpc=:9091 --pprof=:9981     
 ./main master --id=2 --http=:8082 --grpc=:9092 --pprof=:9982     
-./main master --id=3 --http=:8083 --grpc=:9093 --pprof=:9983     
+./main master --id=4 --http=:8084 --grpc=:9094 --pprof=:9984     
 
 ```
 # 2 启动worker

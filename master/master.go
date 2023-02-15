@@ -17,8 +17,6 @@ import (
 
 	"github.com/bwmarrin/snowflake"
 
-	"github.com/a11en4sec/crawler/cmd/worker"
-
 	"go.uber.org/zap"
 
 	"go.etcd.io/etcd/client/v3/concurrency"
@@ -30,6 +28,10 @@ import (
 
 const (
 	RESOURCEPATH = "/resources"
+
+	ADDRESOURCE = iota
+	DELETERESOURCE
+	WorkerServiceName = "go.micro.server.worker"
 )
 
 type Master struct {
@@ -82,19 +84,21 @@ func New(id string, opts ...Option) (*Master, error) {
 		opt(&options)
 	}
 
-	m.resources = make(map[string]*ResourceSpec)
 	m.options = options
+	m.resources = make(map[string]*ResourceSpec)
 
 	node, err := snowflake.NewNode(1)
 	if err != nil {
 		return nil, err
 	}
+
 	m.IDGen = node
 
 	ipv4, err := getLocalIP()
 	if err != nil {
 		return nil, err
 	}
+
 	m.ID = genMasterID(id, ipv4, m.GRPCAddress)
 	m.logger.Sugar().Debugln("master_id:", m.ID)
 
@@ -113,7 +117,7 @@ func New(id string, opts ...Option) (*Master, error) {
 	// master参与Leader竞选
 	go m.Campaign()
 
-	go m.HandleMsg()
+	//go m.HandleMsg()
 
 	return m, nil
 }
@@ -132,12 +136,7 @@ func (m *Master) Campaign() {
 	if err != nil {
 		fmt.Println("NewSession", "error", "err", err)
 	}
-	defer func() {
-		err := s.Close()
-		if err != nil {
-			fmt.Println("Campaign etcd session close ", "error", "err", err)
-		}
-	}()
+	defer s.Client()
 
 	// 2 创建一个新的etcd选举对象，抢占到该 Key 的 Master 将变为 Leader
 	e := concurrency.NewElection(s, "/crawler/election")
@@ -180,6 +179,11 @@ func (m *Master) Campaign() {
 		case resp := <-leaderChange:
 			if len(resp.Kvs) > 0 {
 				m.logger.Info("watch leader change", zap.String("leader:", string(resp.Kvs[0].Value)))
+				m.leaderID = string(resp.Kvs[0].Value)
+				if m.ID != string(resp.Kvs[0].Value) {
+					//当前已不再是leader
+					atomic.StoreInt32(&m.ready, 0)
+				}
 			}
 		case resp := <-workerNodeChange:
 			m.logger.Info("watch worker change", zap.Any("worker:", resp))
@@ -200,6 +204,7 @@ func (m *Master) Campaign() {
 			}
 			if rsp != nil && len(rsp.Kvs) > 0 {
 				m.logger.Debug("get Leader", zap.String("value", string(rsp.Kvs[0].Value)))
+				m.leaderID = string(rsp.Kvs[0].Value)
 				if m.IsLeader() && m.ID != string(rsp.Kvs[0].Value) {
 					//当前已不再是leader
 					atomic.StoreInt32(&m.ready, 0)
@@ -218,7 +223,7 @@ func (m *Master) elect(e *concurrency.Election, ch chan error) {
 // WatchWorker Master 对 Worker 的服务发现
 func (m *Master) WatchWorker() chan *registry.Result {
 	// 服务发现使用 micro 提供的 registry 功能
-	watch, err := m.registry.Watch(registry.WatchService(worker.ServiceName))
+	watch, err := m.registry.Watch(registry.WatchService(WorkerServiceName))
 	if err != nil {
 		panic(err)
 	}
@@ -263,8 +268,8 @@ func (m *Master) reAssign() {
 	// 如果发现资源都已经分配给了对应的 Worker，它就会查看当前节点是否存活。
 	// 如果当前节点已经不存在了，就将该资源分配给其他的节点。
 
-	m.rlock.Lock()
-	defer m.rlock.Unlock()
+	//m.rlock.Lock()
+	//defer m.rlock.Unlock()
 
 	for _, r := range m.resources {
 		if r.AssignedNode == "" {
@@ -285,10 +290,7 @@ func (m *Master) reAssign() {
 
 	//m.AddResources(rs)
 	for _, r := range rs {
-		_, err := m.addResources(r)
-		if err != nil {
-			m.logger.Error("addResources failed", zap.Error(err))
-		}
+		m.addResources(r)
 	}
 }
 
@@ -325,14 +327,14 @@ func getNodeID(assigned string) (string, error) {
 //	return nil
 //}
 
-func (m *Master) AddResources(rs []*ResourceSpec) {
-	for _, r := range rs {
-		_, err := m.addResources(r)
-		if err != nil {
-			m.logger.Error("AddResources", zap.Error(err))
-		}
-	}
-}
+//func (m *Master) AddResources(rs []*ResourceSpec) {
+//	for _, r := range rs {
+//		_, err := m.addResources(r)
+//		if err != nil {
+//			m.logger.Error("AddResources", zap.Error(err))
+//		}
+//	}
+//}
 
 //func (m *Master) AddResource(ctx context.Context, req *proto.ResourceSpec, resp *proto.NodeSpec) error {
 //	nodeSpec, err := m.addResources(&ResourceSpec{Name: req.Name})
@@ -344,14 +346,14 @@ func (m *Master) AddResources(rs []*ResourceSpec) {
 //}
 
 func (m *Master) updateWorkNodes() {
-	services, err := m.registry.GetService(worker.ServiceName)
+	services, err := m.registry.GetService(WorkerServiceName)
 	if err != nil {
 		m.logger.Error("get service", zap.Error(err))
 	}
 
 	nodes := make(map[string]*NodeSpec)
-	m.rlock.Lock()
-	defer m.rlock.Unlock()
+	//m.rlock.Lock()
+	//defer m.rlock.Unlock()
 	if len(services) > 0 {
 		for _, spec := range services[0].Nodes {
 			nodes[spec.Id] = &NodeSpec{
@@ -414,12 +416,12 @@ func getResourcePath(name string) string {
 	return fmt.Sprintf("%s/%s", RESOURCEPATH, name)
 }
 
-func encode(s *ResourceSpec) string {
+func Encode(s *ResourceSpec) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
 
-func decode(ds []byte) (*ResourceSpec, error) {
+func Decode(ds []byte) (*ResourceSpec, error) {
 	var s *ResourceSpec
 	err := json.Unmarshal(ds, &s)
 	return s, err
@@ -447,7 +449,7 @@ func (m *Master) addResources(r *ResourceSpec) (*NodeSpec, error) {
 	m.logger.Debug("add resource", zap.Any("specs", r))
 
 	// 写入etcd中
-	_, err = m.etcdCli.Put(context.Background(), getResourcePath(r.Name), encode(r))
+	_, err = m.etcdCli.Put(context.Background(), getResourcePath(r.Name), Encode(r))
 	if err != nil {
 		m.logger.Error("put etcd failed", zap.Error(err))
 		return nil, err
@@ -473,12 +475,16 @@ func (m *Master) loadResource() error {
 	defer m.rlock.Unlock()
 
 	for _, kv := range resp.Kvs {
-		r, err := decode(kv.Value)
+		r, err := Decode(kv.Value)
 		if err == nil && r != nil {
 			resources[r.Name] = r
 		}
 	}
 	m.logger.Info("leader init load resource", zap.Int("lenth", len(m.resources)))
+
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
+
 	m.resources = resources
 
 	for _, r := range m.resources {
@@ -488,7 +494,8 @@ func (m *Master) loadResource() error {
 			if err != nil {
 				m.logger.Error("getNodeID failed", zap.Error(err))
 			}
-			if node, ok := m.workNodes[id]; ok {
+			node, ok := m.workNodes[id]
+			if ok {
 				node.Payload++
 			}
 		}
@@ -543,20 +550,22 @@ func (m *Master) AddSeed() {
 		}
 	}
 
-	m.AddResources(rs)
-}
-
-func (m *Master) HandleMsg() {
-	msgCh := make(chan *Message)
-
-	select {
-	case msg := <-msgCh:
-		switch msg.Cmd {
-		case MSGADD:
-			m.AddResources(msg.Specs)
-		case MSGDELETE:
-
-		}
+	for _, r := range rs {
+		m.addResources(r)
 	}
-
 }
+
+//func (m *Master) HandleMsg() {
+//	msgCh := make(chan *Message)
+//
+//	select {
+//	case msg := <-msgCh:
+//		switch msg.Cmd {
+//		case MSGADD:
+//			m.AddResource(msg.Specs)
+//		case MSGDELETE:
+//
+//		}
+//	}
+//
+//}

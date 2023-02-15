@@ -8,15 +8,30 @@ import (
 type Option func(opt *options)
 
 type options struct {
-	WorkCount int
-	Fetcher   spider.Fetcher
-	Logger    *zap.Logger
-	Seeds     []*spider.Task
+	WorkCount   int
+	Fetcher     spider.Fetcher
+	Storage     spider.Storage
+	Logger      *zap.Logger
+	Seeds       []*spider.Task
+	registryURL string
+
 	scheduler Scheduler
 }
 
 var defaultOptions = options{
 	Logger: zap.NewNop(),
+}
+
+func WithStorage(s spider.Storage) Option {
+	return func(opts *options) {
+		opts.Storage = s
+	}
+}
+
+func WithRegistryURL(registryURL string) Option {
+	return func(opts *options) {
+		opts.registryURL = registryURL
+	}
 }
 
 func WithLogger(logger *zap.Logger) Option {

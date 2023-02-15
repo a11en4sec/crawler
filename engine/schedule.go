@@ -3,6 +3,7 @@ package engine
 import (
 	"github.com/a11en4sec/crawler/parse/doubanbook"
 	"github.com/a11en4sec/crawler/spider"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 )
 
@@ -12,7 +13,7 @@ func init() {
 	Store.Add(doubanbook.DoubanBookTask)
 }
 
-func NewEngine(opts ...Option) *Crawler {
+func NewEngine(opts ...Option) (*Crawler, error) {
 	options := defaultOptions
 	// 选项模式，根据需要丰富defaultOptions
 	for _, opt := range opts {
@@ -25,7 +26,20 @@ func NewEngine(opts ...Option) *Crawler {
 	e.failures = make(map[string]*spider.Request)
 	e.options = options
 
-	return e
+	// 任务加上默认的采集器与存储器
+	for _, task := range Store.list {
+		task.Fetcher = e.Fetcher
+		task.Storage = e.Storage
+	}
+	// 加上etcd CLI
+	endpoints := []string{e.registryURL}
+	cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints})
+	if err != nil {
+		return nil, err
+	}
+	e.etcdCli = cli
+
+	return e, err
 }
 
 type Scheduler interface {
@@ -96,6 +110,18 @@ func (s *Schedule) Schedule() {
 			req = s.reqQueue[0]
 			s.reqQueue = s.reqQueue[1:]
 			workerCh = s.workerCh
+		}
+
+		// 请求校验(深度/任务是否关闭)
+		if req != nil {
+			if err := req.Check(); err != nil {
+				zap.L().Debug("check failed",
+					zap.Error(err),
+				)
+				req = nil
+				workerCh = nil
+				continue
+			}
 		}
 
 		select {

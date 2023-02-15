@@ -49,6 +49,7 @@ var WorkerCmd = &cobra.Command{
 
 func init() {
 	WorkerCmd.Flags().BoolVar(
+		// 默认是集群模式，会使用到etcd
 		&cluster, "cluster", true, "run mode")
 
 	WorkerCmd.Flags().StringVar(
@@ -65,9 +66,6 @@ func init() {
 
 	WorkerCmd.Flags().StringVar(
 		&PProfListenAddress, "pprof", ":9981", "set pprof address")
-
-	WorkerCmd.Flags().BoolVar(
-		&cluster, "cluster", true, "run mode")
 
 }
 
@@ -149,22 +147,30 @@ func Run() {
 	}
 	seeds := ParseTaskConfig(logger, f, storage, tcfg)
 
-	s := engine.NewEngine(
-		engine.WithFetcher(f),
-		engine.WithLogger(logger),
-		engine.WithWorkCount(5),
-		engine.WithSeeds(seeds),
-		engine.WithScheduler(engine.NewSchedule()),
-	)
-
-	// worker start
-	go s.Run()
-
+	// 获取配置
 	var sconfig ServerConfig
 	if err := cfg.Get("GRPCServer").Scan(&sconfig); err != nil {
 		logger.Error("get GRPC Server config failed", zap.Error(err))
 	}
 	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
+
+	s, err := engine.NewEngine(
+		engine.WithFetcher(f),
+		engine.WithLogger(logger),
+		engine.WithWorkCount(5),
+		engine.WithSeeds(seeds),
+		engine.WithScheduler(engine.NewSchedule()),
+		engine.WithRegistryURL(sconfig.RegistryAddress),
+		engine.WithStorage(storage),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	id := sconfig.Name + "-" + workerID
+
+	// worker start
+	go s.Run(id, cluster)
 
 	// start http proxy to GRPC
 	go RunHTTPServer(sconfig)
@@ -283,7 +289,7 @@ func ParseTaskConfig(logger *zap.Logger, f spider.Fetcher, s spider.Storage, cfg
 		if len(cfg.Limits) > 0 {
 			for _, lcfg := range cfg.Limits {
 				// speed limiter
-				l := rate.NewLimiter(limiter.Per(lcfg.EventCount, time.Duration(lcfg.EventDur)*time.Second), 1)
+				l := rate.NewLimiter(limiter.Per(lcfg.EventCount, time.Duration(lcfg.EventDur)*time.Second), lcfg.Bucket)
 				limits = append(limits, l)
 			}
 			multiLimiter := limiter.Multi(limits...)

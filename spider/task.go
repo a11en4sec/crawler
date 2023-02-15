@@ -37,6 +37,8 @@ type Task struct {
 	VisitedLock sync.Mutex
 	//RootReq     *Request // 起始待爬的资源(seed)
 	Rule RuleTree //规则树
+
+	Closed bool // 任务是否关闭
 	Options
 }
 

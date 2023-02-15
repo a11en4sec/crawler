@@ -133,8 +133,6 @@ func Run() {
 		master.WithSeeds(seeds),
 	)
 
-	_ = m
-
 	if err != nil {
 		logger.Error("init  master falied", zap.Error(err))
 	}
@@ -185,14 +183,18 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 
 	service.Init()
 
-	if err := greeter.RegisterGreeterHandler(service.Server(), new(Greeter)); err != nil {
-		logger.Fatal("register handler failed", zap.Error(err))
-	}
+	// 注册为grpc服务1
+	//if err := greeter.RegisterGreeterHandler(service.Server(), new(Greeter)); err != nil {
+	//	logger.Fatal("register handler failed", zap.Error(err))
+	//}
 
 	// 注册为grpc服务2
+	// 第二个参数是 type CrawlerMasterHandler interface
+	// m 实现接口 CrawlerMasterHandler
 	if err := proto.RegisterCrawlerMasterHandler(service.Server(), m); err != nil {
 		logger.Fatal("register handler failed", zap.Error(err))
 	}
+
 	if err := service.Run(); err != nil {
 		logger.Fatal("grpc server stop", zap.Error(err))
 	}
@@ -218,9 +220,9 @@ func RunHTTPServer(cfg ServerConfig) {
 	}
 
 	// http代理调用grpc
-	//if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
-	//	zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
-	//}
+	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
+		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
+	}
 
 	if err := proto.RegisterCrawlerMasterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))

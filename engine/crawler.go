@@ -1,8 +1,14 @@
 package engine
 
 import (
+	"context"
+	"fmt"
 	"runtime/debug"
+	"strings"
 	"sync"
+
+	"github.com/a11en4sec/crawler/master"
+	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"github.com/a11en4sec/crawler/spider"
 
@@ -10,32 +16,172 @@ import (
 )
 
 type Crawler struct {
+	id          string
 	out         chan spider.ParseResult
 	Visited     map[string]bool // keys is md5(URL + method)
 	VisitedLock sync.Mutex
 	failures    map[string]*spider.Request // 失败请求id -> 失败请求
 	failureLock sync.Mutex
+
+	resources map[string]*master.ResourceSpec
+	rlock     sync.Mutex
+
+	etcdCli *clientv3.Client
 	options
 }
 
-func (e *Crawler) Run() {
-	go e.Schedule()
-
-	for i := 0; i < e.WorkCount; i++ {
-		go e.CreateWork()
+func (c *Crawler) Run(id string, cluster bool) {
+	c.id = id
+	// 单机模式
+	if !cluster {
+		// 从本地加载seed task
+		c.handleSeeds()
 	}
 
-	e.HandleResult()
+	// 集群模式(默认)
+	go c.loadResource()  // 从etcd中加载资源(任务),并调用runTasks.
+	go c.watchResource() // watch etcd的事件
+	go c.Schedule()
+
+	for i := 0; i < c.WorkCount; i++ {
+		go c.CreateWork()
+	}
+
+	c.HandleResult()
 }
 
-func (e *Crawler) Schedule() {
+func (c *Crawler) watchResource() {
+	watch := c.etcdCli.Watch(context.Background(),
+		master.RESOURCEPATH,
+		clientv3.WithPrefix(),
+		clientv3.WithPrevKV())
+	for w := range watch {
+		if w.Err() != nil {
+			c.Logger.Error("watch resource failed", zap.Error(w.Err()))
+			continue
+		}
+		if w.Canceled {
+			c.Logger.Error("watch resource canceled")
+			return
+		}
+		for _, ev := range w.Events {
+			spec, err := master.Decode(ev.Kv.Value)
+			if err != nil {
+				c.Logger.Error("decode etcd value failed", zap.Error(err))
+			}
+
+			switch ev.Type {
+			case clientv3.EventTypePut:
+				// 删除事件
+				spec, err := master.Decode(ev.Kv.Value)
+				if err != nil {
+					c.Logger.Error("decode etcd value failed", zap.Error(err))
+				}
+
+				if ev.IsCreate() {
+					c.Logger.Info("receive create resource", zap.Any("spec", spec))
+
+				} else if ev.IsModify() {
+					c.Logger.Info("receive update resource", zap.Any("spec", spec))
+				}
+				c.rlock.Lock()
+				c.runTasks(spec.Name)
+				c.rlock.Unlock()
+
+			case clientv3.EventTypeDelete:
+				c.Logger.Info("receive delete resource", zap.Any("spec", spec))
+				spec, err := master.Decode(ev.PrevKv.Value)
+				if err != nil {
+					c.Logger.Error("decode etcd value failed", zap.Error(err))
+				}
+				c.rlock.Lock()
+				c.deleteTasks(spec.Name) // 把本地内存中的kv删除
+				c.rlock.Unlock()
+			}
+		}
+	}
+}
+
+func (c *Crawler) deleteTasks(taskName string) {
+	t, ok := Store.Hash[taskName]
+	if !ok {
+		c.Logger.Error("can not find preset tasks", zap.String("task name", taskName))
+		return
+	}
+	t.Closed = true
+	delete(c.resources, taskName)
+}
+
+func getID(assignedNode string) string {
+	s := strings.Split(assignedNode, "|")
+	if len(s) < 2 {
+		return ""
+	}
+	return s[0]
+}
+
+func (c *Crawler) loadResource() error {
+	resp, err := c.etcdCli.Get(context.Background(), master.RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithSerializable())
+	if err != nil {
+		return fmt.Errorf("etcd get failed")
+	}
+
+	resources := make(map[string]*master.ResourceSpec)
+	for _, kv := range resp.Kvs {
+		r, err := master.Decode(kv.Value)
+		if err == nil && r != nil {
+			id := getID(r.AssignedNode)
+			if len(id) > 0 && c.id == id {
+				resources[r.Name] = r
+			}
+		}
+	}
+	c.Logger.Info("leader init load resource", zap.Int("lenth", len(resources)))
+
+	c.rlock.Lock()
+	defer c.rlock.Unlock()
+	c.resources = resources
+	for _, r := range c.resources {
+		c.runTasks(r.Name)
+	}
+
+	return nil
+}
+
+func (c *Crawler) runTasks(taskName string) {
+	t, ok := Store.Hash[taskName]
+	if !ok {
+		c.Logger.Error("can not find preset tasks", zap.String("task name", taskName))
+		return
+	}
+	t.Closed = false
+	res, err := t.Rule.Root()
+
+	if err != nil {
+		c.Logger.Error("get root failed",
+			zap.Error(err),
+		)
+		return
+	}
+
+	for _, req := range res {
+		req.Task = t
+	}
+	c.scheduler.Push(res...)
+}
+
+func (c *Crawler) Schedule() {
+	c.scheduler.Schedule()
+}
+
+func (c *Crawler) handleSeeds() {
 	var reqQueue []*spider.Request
 
-	for _, task := range e.Seeds {
+	for _, task := range c.Seeds {
 		// 从全局store中取出Task
 		t, ok := Store.Hash[task.Name]
 		if !ok {
-			e.Logger.Error("can not find preset tasks", zap.String("task name", task.Name))
+			c.Logger.Error("can not find preset tasks", zap.String("task name", task.Name))
 
 			continue
 		}
@@ -50,7 +196,7 @@ func (e *Crawler) Schedule() {
 		// 取出Task的根，根中存储的是种子request的列表
 		rootReqs, err := task.Rule.Root()
 		if err != nil {
-			e.Logger.Error("get root failed",
+			c.Logger.Error("get root failed",
 				zap.Error(err),
 			)
 
@@ -64,51 +210,31 @@ func (e *Crawler) Schedule() {
 
 		reqQueue = append(reqQueue, rootReqs...)
 	}
-	//go func() {
-	//	for {
-	//		var req *collect.Request
-	//		var ch chan *collect.Request
-	//		//ch := make(chan *collect.Request)
-	//
-	//		if len(reqQueue) > 0 {
-	//			req = reqQueue[0]
-	//			reqQueue = reqQueue[1:]
-	//			ch = e.workerCh
-	//		}
-	//
-	//		select {
-	//		case r := <-e.requestCh: // 监听一次fetch的解析结果中是否有新的request加入
-	//			reqQueue = append(reqQueue, r)
-	//		case ch <- req: // 传递给workerCh
-	//		}
-	//	}
-	//}()
-	go e.scheduler.Schedule()
-	go e.scheduler.Push(reqQueue...)
+	go c.scheduler.Push(reqQueue...)
 }
 
-func (e *Crawler) CreateWork() {
+func (c *Crawler) CreateWork() {
 	defer func() {
 		if err := recover(); err != nil {
-			e.Logger.Error("worker panic",
+			c.Logger.Error("worker panic",
 				zap.Any("err", err),
 				zap.String("stack", string(debug.Stack())))
 		}
 	}()
 
 	for {
-		req := e.scheduler.Pull() // 从workerChan中拉取一个req
+		req := c.scheduler.Pull() // 从workerChan中拉取一个req
 
 		//判断r是否超过爬取的最高深度
 		if err := req.Check(); err != nil {
-			e.Logger.Error("check failed", zap.Error(err))
+			c.Logger.Error("check failed", zap.Error(err))
 
 			continue
 		}
 
 		// 判断当前请求是否已被访问
-		if !req.Task.Reload && e.HasVisited(req) {
-			e.Logger.Debug("request has visited",
+		if !req.Task.Reload && c.HasVisited(req) {
+			c.Logger.Debug("request has visited",
 				zap.String("url:", req.URL),
 			)
 
@@ -116,32 +242,32 @@ func (e *Crawler) CreateWork() {
 		}
 
 		// 没有被访问，存到map中
-		e.StoreVisited(req)
+		c.StoreVisited(req)
 
 		//body, err := e.Fetcher.Get(req)
 		body, err := req.Fetch()
 
 		//fmt.Println("[++]", string(body))
 		if err != nil {
-			e.Logger.Error("can not fetch ",
+			c.Logger.Error("can not fetch ",
 				zap.Error(err),
 				zap.String("url", req.URL),
 			)
 
 			// 请求失败，将请求放到错误map中
-			e.SetFailure(req)
+			c.SetFailure(req)
 
 			continue
 		}
 
 		if len(body) < 6000 {
-			e.Logger.Error("can't fetch ",
+			c.Logger.Error("can't fetch ",
 				zap.Int("length", len(body)),
 				zap.String("url", req.URL),
 			)
 
 			// 请求失败，将请求放到错误map中
-			e.SetFailure(req)
+			c.SetFailure(req)
 
 			continue
 		}
@@ -159,7 +285,7 @@ func (e *Crawler) CreateWork() {
 		result, err := rule.ParseFunc(ctx)
 
 		if err != nil {
-			e.Logger.Error("ParseFunc failed ",
+			c.Logger.Error("ParseFunc failed ",
 				zap.Error(err),
 				zap.String("url", req.URL),
 			)
@@ -169,17 +295,17 @@ func (e *Crawler) CreateWork() {
 
 		// 解析结果里面新的url，继续爬
 		if len(result.Requesrts) > 0 {
-			go e.scheduler.Push(result.Requesrts...)
+			go c.scheduler.Push(result.Requesrts...)
 		}
 
-		e.out <- result
+		c.out <- result
 	}
 }
 
-func (e *Crawler) HandleResult() {
-	for result := range e.out {
+func (c *Crawler) HandleResult() {
+	for result := range c.out {
 		for _, item := range result.Items {
-			e.Logger.Sugar().Info("get result ", item)
+			c.Logger.Sugar().Info("get result ", item)
 
 			switch d := item.(type) {
 			case *spider.DataCell:
@@ -190,51 +316,51 @@ func (e *Crawler) HandleResult() {
 				//	e.Logger.Error("存储失败")
 				//}
 				if err := d.Task.Storage.Save(d); err != nil {
-					e.Logger.Error("")
+					c.Logger.Error("")
 				}
 			}
 
-			e.Logger.Sugar().Info("get result ", item)
+			c.Logger.Sugar().Info("get result ", item)
 		}
 	}
 }
 
-func (e *Crawler) HasVisited(r *spider.Request) bool {
-	e.VisitedLock.Lock()
-	defer e.VisitedLock.Unlock()
+func (c *Crawler) HasVisited(r *spider.Request) bool {
+	c.VisitedLock.Lock()
+	defer c.VisitedLock.Unlock()
 
 	unique := r.Unique()
 
-	return e.Visited[unique]
+	return c.Visited[unique]
 }
 
-func (e *Crawler) StoreVisited(reqs ...*spider.Request) {
-	e.VisitedLock.Lock()
-	defer e.VisitedLock.Unlock()
+func (c *Crawler) StoreVisited(reqs ...*spider.Request) {
+	c.VisitedLock.Lock()
+	defer c.VisitedLock.Unlock()
 
 	for _, r := range reqs {
 		unique := r.Unique()
-		e.Visited[unique] = true
+		c.Visited[unique] = true
 	}
 }
 
-func (e *Crawler) SetFailure(req *spider.Request) {
+func (c *Crawler) SetFailure(req *spider.Request) {
 	// 没有被重新爬取过,第一次fetch失败
 	if !req.Task.Reload {
-		e.VisitedLock.Lock()
+		c.VisitedLock.Lock()
 		unique := req.Unique()
 		// 从已爬取的map中删除该req
-		delete(e.Visited, unique)
-		e.VisitedLock.Unlock()
+		delete(c.Visited, unique)
+		c.VisitedLock.Unlock()
 	}
 
-	e.failureLock.Lock()
-	defer e.failureLock.Unlock()
+	c.failureLock.Lock()
+	defer c.failureLock.Unlock()
 
 	// 失败队列中没有，说明是首次失败
-	if _, ok := e.failures[req.Unique()]; !ok {
+	if _, ok := c.failures[req.Unique()]; !ok {
 		// 首次失败时，再重新执行一次
-		e.failures[req.Unique()] = req
-		e.scheduler.Push(req)
+		c.failures[req.Unique()] = req
+		c.scheduler.Push(req)
 	}
 }
