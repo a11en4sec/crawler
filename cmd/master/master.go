@@ -10,6 +10,8 @@ import (
 	ratePlugin "github.com/go-micro/plugins/v4/wrapper/ratelimiter/ratelimit"
 	"github.com/juju/ratelimit"
 
+	"github.com/go-micro/plugins/v4/wrapper/breaker/hystrix"
+
 	//"github.com/a11en4sec/crawler/proto/crawler"
 	proto "github.com/a11en4sec/crawler/proto/crawler"
 
@@ -180,7 +182,26 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 		// ratePlugin.NewHandlerWrapper 的第一个参数为之前设置的令牌桶，
 		// 第二个参数可以指定当请求速率超过阈值时，是否堵塞住。此处为 false，表示不堵塞并立即返回错误
 		micro.WrapHandler(ratePlugin.NewHandlerWrapper(b, false)),
+		// 熔断器
+		micro.WrapClient(hystrix.NewClientWrapper()),
 	)
+	// 函数修改某一个[接口]的熔断配置
+	hystrix.ConfigureCommand("go.micro.server.master.CrawlerMaster.AddResource", hystrix.CommandConfig{
+		Timeout:                10000, // 请求的超时时间
+		MaxConcurrentRequests:  100,   // 最大的并发数量
+		RequestVolumeThreshold: 10,    // 触发断路器的最小数量（避免小量请求的干扰）
+		SleepWindow:            6000,  // 断路器打开状态时，等待多长时间再次检测当前链路的状态
+		ErrorPercentThreshold:  30,    // 失败率的阈值，当失败率超过该阈值时，将触发熔断
+	})
+
+	// 修改所有接口的默认熔断参数
+	hystrix.ConfigureDefault(hystrix.CommandConfig{
+		Timeout:                10000, // 请求的超时时间
+		MaxConcurrentRequests:  100,   // 最大的并发数量
+		RequestVolumeThreshold: 10,    // 触发断路器的最小数量（避免小量请求的干扰）
+		SleepWindow:            6000,  // 断路器打开状态时，等待多长时间再次检测当前链路的状态
+		ErrorPercentThreshold:  30,    // 失败率的阈值，当失败率超过该阈值时，将触发熔断
+	})
 
 	cl := proto.NewCrawlerMasterService(cfg.Name, service.Client())
 
