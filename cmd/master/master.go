@@ -7,6 +7,8 @@ import (
 	"time"
 
 	grpccli "github.com/go-micro/plugins/v4/client/grpc"
+	ratePlugin "github.com/go-micro/plugins/v4/wrapper/ratelimiter/ratelimit"
+	"github.com/juju/ratelimit"
 
 	//"github.com/a11en4sec/crawler/proto/crawler"
 	proto "github.com/a11en4sec/crawler/proto/crawler"
@@ -157,6 +159,12 @@ type ServerConfig struct {
 
 func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
 	//reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
+
+	// 令牌桶
+	// 第一个参数为 0.5，表示每秒钟放入的令牌个数为 0.5 个
+	// 第二个参数为桶的大小
+	b := ratelimit.NewBucketWithRate(1, 2)
+
 	service := micro.NewService(
 		micro.Server(grpc.NewServer(
 			server.Id(masterID),
@@ -168,6 +176,10 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 		micro.WrapHandler(logWrapper(logger)),
 		micro.Name(cfg.Name),
 		micro.Client(grpccli.NewClient()),
+		// micro.WrapHandler包装了go-micro的Server端设置的限流中间件
+		// ratePlugin.NewHandlerWrapper 的第一个参数为之前设置的令牌桶，
+		// 第二个参数可以指定当请求速率超过阈值时，是否堵塞住。此处为 false，表示不堵塞并立即返回错误
+		micro.WrapHandler(ratePlugin.NewHandlerWrapper(b, false)),
 	)
 
 	cl := proto.NewCrawlerMasterService(cfg.Name, service.Client())

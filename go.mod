@@ -8,9 +8,11 @@ require (
 	github.com/go-micro/plugins/v4/config/encoder/toml v1.2.0
 	github.com/go-micro/plugins/v4/registry/etcd v1.2.0
 	github.com/go-micro/plugins/v4/server/grpc v1.2.0
+	github.com/go-micro/plugins/v4/wrapper/ratelimiter/ratelimit v1.2.0
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.0
+	github.com/juju/ratelimit v1.0.2
 	github.com/panjf2000/ants/v2 v2.6.0
 	github.com/robertkrimen/otto v0.2.1
 	github.com/spf13/cobra v1.1.1

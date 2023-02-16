@@ -22,6 +22,11 @@ curl -H "content-type: application/json" -d '{"id":"zjx","name": "task-test-4"}'
 ### 3.2 直接请求follow节点添加资源(会转发)
 角色是follow的master收到请求后，会通过grpc client,向leader转发请求,过程如下:
 
+## 4 通过接口删除资源
+```shell
+curl -H "content-type: application/json" -X DELETE  -d '{"id":"2","name": "2"}' http://localhost:8084/crawler/resource
+```
+
 ```shell
 
 curl  --request POST 'http://localhost:8082/crawler/resource' --header 'Content-Type: application/json' --data '{"id":"zjx","name": "task-forward"}' 
