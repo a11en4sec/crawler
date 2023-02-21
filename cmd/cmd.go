@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/a11en4sec/crawler/cmd/master"
+	"github.com/a11en4sec/crawler/cmd/usercenter"
 	"github.com/a11en4sec/crawler/cmd/worker"
 	"github.com/a11en4sec/crawler/version"
 	"github.com/spf13/cobra"
@@ -19,6 +20,6 @@ var versionCmd = &cobra.Command{
 
 func Execute() {
 	var rootCmd = &cobra.Command{Use: "crawler"}
-	rootCmd.AddCommand(master.MasterCmd, worker.WorkerCmd, versionCmd)
+	rootCmd.AddCommand(master.MasterCmd, worker.WorkerCmd, versionCmd, usercenter.UserCenterCmd)
 	rootCmd.Execute()
 }

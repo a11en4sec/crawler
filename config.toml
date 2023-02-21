@@ -30,3 +30,12 @@ RegisterTTL = 60
 RegisterInterval = 15
 ClientTimeOut   = 10
 Name = "go.micro.server.master"
+
+[UserCenter]
+HTTPListenAddress = ":4080"
+GRPCListenAddress = ":4090"
+RegistryAddress = ":2379"
+RegisterTTL = 60
+RegisterInterval = 15
+ClientTimeOut   = 10
+Name = "go.micro.server.usercenter"

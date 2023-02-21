@@ -1,10 +1,18 @@
-package master
+package usercenter
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/a11en4sec/crawler/auth"
+
+	"google.golang.org/grpc/metadata"
+
+	"github.com/a11en4sec/crawler/proto/user"
+	"github.com/a11en4sec/crawler/userCenter"
 
 	_ "github.com/go-micro/plugins/v4/auth/jwt"
 
@@ -13,14 +21,6 @@ import (
 	"github.com/juju/ratelimit"
 
 	"github.com/go-micro/plugins/v4/wrapper/breaker/hystrix"
-
-	//"github.com/a11en4sec/crawler/proto/crawler"
-	proto "github.com/a11en4sec/crawler/proto/crawler"
-
-	"github.com/a11en4sec/crawler/cmd/worker"
-	"github.com/a11en4sec/crawler/spider"
-
-	"github.com/a11en4sec/crawler/master"
 
 	"github.com/go-micro/plugins/v4/registry/etcd"
 
@@ -46,10 +46,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-var MasterCmd = &cobra.Command{
-	Use:   "master",
-	Short: "run master service.",
-	Long:  "run master service.",
+var (
+	name    = "helloworld"
+	version = "latest"
+)
+
+var UserCenterCmd = &cobra.Command{
+	Use:   "usercenter",
+	Short: "run uc service.",
+	Long:  "run uc service.",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		Run()
@@ -63,17 +68,17 @@ var GRPCListenAddress string
 var cfgFile string
 
 func init() {
-	// 给子命令master 设置flag，./main master [--pprof=9981 | --id=1 | --http=8081 | --grpc=9091]
-	MasterCmd.Flags().StringVar(
-		&PProfListenAddress, "pprof", ":9981", "set pprof address")
-	MasterCmd.Flags().StringVar(
-		&cfgFile, "config", "config.toml", "set master id")
-	MasterCmd.Flags().StringVar(
-		&masterID, "id", "1", "set master id")
-	MasterCmd.Flags().StringVar(
-		&HTTPListenAddress, "http", ":8081", "set HTTP listen address")
-	MasterCmd.Flags().StringVar(
-		&GRPCListenAddress, "grpc", ":9091", "set GRPC listen address")
+	// 给子命令master 设置flag，./main usercenter [--pprof=9981 | --id=1 | --http=8081 | --grpc=9091]
+	UserCenterCmd.Flags().StringVar(
+		&PProfListenAddress, "pprof", ":49981", "set pprof address")
+	UserCenterCmd.Flags().StringVar(
+		&cfgFile, "config", "config.toml", "set config file")
+	UserCenterCmd.Flags().StringVar(
+		&HTTPListenAddress, "http", ":4080", "set HTTP listen address")
+	UserCenterCmd.Flags().StringVar(
+		&GRPCListenAddress, "grpc", ":4180", "set GRPC listen address")
+	UserCenterCmd.Flags().StringVar(
+		&masterID, "id", "1", "set uc id")
 
 }
 
@@ -116,31 +121,15 @@ func Run() {
 	zap.ReplaceGlobals(logger)
 
 	//
-	fmt.Println("hello master")
+	fmt.Println("[+] User Center Service...")
 
 	var sconfig ServerConfig
-	if err := cfg.Get("MasterServer").Scan(&sconfig); err != nil {
+	if err := cfg.Get("UserCenter").Scan(&sconfig); err != nil {
 		logger.Error("get GRPC Server config failed", zap.Error(err))
 	}
 	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
 
 	reg := etcd.NewRegistry(registry.Addrs(sconfig.RegistryAddress))
-
-	// init tasks
-	var tcfg []spider.TaskConfig
-	if err := cfg.Get("Tasks").Scan(&tcfg); err != nil {
-		logger.Error("init seed tasks", zap.Error(err))
-	}
-	seeds := worker.ParseTaskConfig(logger, nil, nil, tcfg)
-
-	m, err := master.New(
-		masterID,
-		master.WithLogger(logger.Named("master")),
-		master.WithGRPCAddress(GRPCListenAddress),
-		master.WithRegistryUrl(sconfig.RegistryAddress),
-		master.WithRegistry(reg), // 将etcd注入到go-micro中
-		master.WithSeeds(seeds),
-	)
 
 	if err != nil {
 		logger.Error("init  master falied", zap.Error(err))
@@ -150,7 +139,7 @@ func Run() {
 	go RunHTTPServer(sconfig)
 
 	// start grpc server
-	RunGRPCServer(m, logger, reg, sconfig)
+	RunGRPCServer(logger, reg, sconfig)
 }
 
 type ServerConfig struct {
@@ -164,7 +153,7 @@ type ServerConfig struct {
 	ClientTimeOut    int
 }
 
-func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
+func RunGRPCServer(logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
 	//reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
 
 	// 令牌桶
@@ -190,14 +179,6 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 		// 熔断器
 		micro.WrapClient(hystrix.NewClientWrapper()),
 	)
-	// 函数修改某一个[接口]的熔断配置
-	hystrix.ConfigureCommand("go.micro.server.master.CrawlerMaster.AddResource", hystrix.CommandConfig{
-		Timeout:                10000, // 请求的超时时间
-		MaxConcurrentRequests:  100,   // 最大的并发数量
-		RequestVolumeThreshold: 10,    // 触发断路器的最小数量（避免小量请求的干扰）
-		SleepWindow:            6000,  // 断路器打开状态时，等待多长时间再次检测当前链路的状态
-		ErrorPercentThreshold:  30,    // 失败率的阈值，当失败率超过该阈值时，将触发熔断
-	})
 
 	// 修改所有接口的默认熔断参数
 	hystrix.ConfigureDefault(hystrix.CommandConfig{
@@ -208,10 +189,6 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 		ErrorPercentThreshold:  30,    // 失败率的阈值，当失败率超过该阈值时，将触发熔断
 	})
 
-	cl := proto.NewCrawlerMasterService(cfg.Name, service.Client())
-
-	m.SetForwardCli(cl)
-
 	// 设置micro 客户端默认超时时间为10秒钟
 	if err := service.Client().Init(client.RequestTimeout(time.Duration(cfg.ClientTimeOut) * time.Second)); err != nil {
 		logger.Sugar().Error("micro client init error. ", zap.String("error:", err.Error()))
@@ -219,17 +196,17 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 		return
 	}
 
-	service.Init()
+	service.Init(
+		micro.Name(name),
+		micro.Version(version),
+		micro.WrapHandler(auth.NewAuthWrapper(service)),
+	)
 
-	// 注册为grpc服务1
-	//if err := greeter.RegisterGreeterHandler(service.Server(), new(Greeter)); err != nil {
-	//	logger.Fatal("register handler failed", zap.Error(err))
-	//}
+	if err := user.RegisterUserHandler(service.Server(), new(userCenter.LoginService)); err != nil {
+		logger.Fatal("register handler failed", zap.Error(err))
+	}
 
-	// 注册为grpc服务2
-	// 第二个参数是 type CrawlerMasterHandler interface
-	// m 实现接口 CrawlerMasterHandler
-	if err := proto.RegisterCrawlerMasterHandler(service.Server(), m); err != nil {
+	if err := greeter.RegisterGreeterHandler(service.Server(), new(Greeter)); err != nil {
 		logger.Fatal("register handler failed", zap.Error(err))
 	}
 
@@ -238,15 +215,26 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 	}
 }
 
-var (
-	name    = "helloworld"
-	version = "latest"
-)
-
 type Greeter struct{}
 
 func (g *Greeter) Hello(ctx context.Context, req *greeter.Request, rsp *greeter.Response) error {
-	rsp.Greeting = "Hello " + req.Name
+
+	var token string
+
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if ts, ok := md["authorization"]; ok {
+			token = strings.Join(ts, ",")
+		}
+	}
+
+	myclain, err := userCenter.VerifyToken(token)
+	if err != nil {
+		return err
+	}
+	u := myclain.Username
+	//id := myclain.UserID
+	//token := fmt.Sprintf("%v", ctx.Value("Authorization"))
+	rsp.Greeting = "Hello " + req.Name + "from token your are: " + u
 
 	return nil
 }
@@ -257,17 +245,19 @@ func RunHTTPServer(cfg ServerConfig) {
 
 	defer cancel()
 
-	mux := runtime.NewServeMux()
+	// 将http header 注入到grpc的metadata中
+	mux := runtime.NewServeMux(runtime.WithIncomingHeaderMatcher(CustomMatcher))
 	opts := []grpc2.DialOption{
 		grpc2.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	// http代理调用grpc
-	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
+	// 1 http代理调用grpc（userCenter）
+	if err := user.RegisterUserGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
 	}
 
-	if err := proto.RegisterCrawlerMasterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
+	// 2 http代理调用grpc (greeter/hello)
+	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
 	}
 
@@ -282,6 +272,8 @@ func logWrapper(log *zap.Logger) server.HandlerWrapper {
 	return func(fn server.HandlerFunc) server.HandlerFunc {
 		return func(ctx context.Context, req server.Request, rsp interface{}) error {
 
+			fmt.Printf("req.Body:%v \n", req.Body())
+
 			log.Info("receive request",
 				zap.String("method", req.Method()),
 				zap.String("Service", req.Service()),
@@ -293,5 +285,14 @@ func logWrapper(log *zap.Logger) server.HandlerWrapper {
 
 			return err
 		}
+	}
+}
+
+func CustomMatcher(key string) (string, bool) {
+	switch key {
+	case "X-User-Id":
+		return key, true
+	default:
+		return runtime.DefaultHeaderMatcher(key)
 	}
 }

@@ -1,0 +1,26 @@
+syntax = "proto3";
+option go_package = "proto/user";
+import "google/api/annotations.proto";
+
+
+service User {
+  rpc UserLogin(userLoginReq) returns (userLoginResp) {
+    option (google.api.http) = {
+      post: "/userCenter/login"
+      body: "*"
+    };
+  }
+}
+
+message userLoginReq{
+  string name = 1;
+  string pwd = 2;
+  string sign =3;
+}
+
+message userLoginResp{
+  string code = 1;
+  string msg = 2;
+  string data =3;
+  string token =4;
+}

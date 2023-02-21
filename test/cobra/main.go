@@ -35,7 +35,7 @@ Echo works a lot like print, except it has a child command.`,
 	var cmdTimes = &cobra.Command{
 		Use:   "times [string to echo]",
 		Short: "Echo anything to the screen more times",
-		Long: `echo things multiple times back to the user by providing
+		Long: `echo things multiple times back to the userCenter by providing
 a count and a string.`,
 		Args: cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
