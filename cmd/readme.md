@@ -38,7 +38,7 @@ curl  --request POST 'http://localhost:8082/crawler/resource' --header 'Content-
 
 // leader节点日志
 "msg":"receive request","method":"CrawlerMaster.AddResource","Service":"go.micro.server.master","request param:":{"id":"zjx","name":"task-forward"}}
-"msg":"add resource","specs":{"ID":"1622019481540759552","Name":"task-forward","AssignedNode":"go.micro.server.worker-1|192.168.50.199:11901","CreationTime":1675554554713968000}}
+"msg":"add resource","specs":{"ID":"1622019481540759552","Name":"task-forward","AssignedNode":"go.micro.server.worker-1|10.156.157.194:11901","CreationTime":1675554554713968000}}
 ```
 ### 原理
 1. Master中有成员forwardCli
@@ -218,7 +218,7 @@ func (m *Master) AddResource(ctx context.Context, req *proto.ResourceSpec, resp 
 		}],
 		"nodes": [{
 			"id": "go.micro.server.worker-3",
-			"address": "192.168.50.199:11003",
+			"address": "10.156.157.194:11003",
 			"metadata": {
 				"broker": "http",
 				"protocol": "grpc",
@@ -235,26 +235,26 @@ func (m *Master) AddResource(ctx context.Context, req *proto.ResourceSpec, resp 
 ## etcd中的kv
 ```json
 /micro/registry/go.micro.server.master/go.micro.server.master-1
-{"name":"go.micro.server.master","version":"latest","metadata":null,"endpoints":[{"name":"Greeter.Hello","request":{"name":"Request","type":"Request","values":[{"name":"name","type":"string","values":null}]},"response":{"name":"Response","type":"Response","values":[{"name":"greeting","type":"string","values":null}]},"metadata":{"endpoint":"Greeter.Hello","handler":"rpc","method":"POST","path":"/greeter/hello"}}],"nodes":[{"id":"go.micro.server.master-1","address":"192.168.50.199:9091","metadata":{"broker":"http","protocol":"grpc","registry":"etcd","server":"grpc","transport":"grpc"}}]}
+{"name":"go.micro.server.master","version":"latest","metadata":null,"endpoints":[{"name":"Greeter.Hello","request":{"name":"Request","type":"Request","values":[{"name":"name","type":"string","values":null}]},"response":{"name":"Response","type":"Response","values":[{"name":"greeting","type":"string","values":null}]},"metadata":{"endpoint":"Greeter.Hello","handler":"rpc","method":"POST","path":"/greeter/hello"}}],"nodes":[{"id":"go.micro.server.master-1","address":"10.156.157.194:9091","metadata":{"broker":"http","protocol":"grpc","registry":"etcd","server":"grpc","transport":"grpc"}}]}
 
 /micro/registry/go.micro.server.master/go.micro.server.master-3
-{"name":"go.micro.server.master","version":"latest","metadata":null,"endpoints":[{"name":"Greeter.Hello","request":{"name":"Request","type":"Request","values":[{"name":"name","type":"string","values":null}]},"response":{"name":"Response","type":"Response","values":[{"name":"greeting","type":"string","values":null}]},"metadata":{"endpoint":"Greeter.Hello","handler":"rpc","method":"POST","path":"/greeter/hello"}}],"nodes":[{"id":"go.micro.server.master-3","address":"192.168.50.199:9093","metadata":{"broker":"http","protocol":"grpc","registry":"etcd","server":"grpc","transport":"grpc"}}]}
+{"name":"go.micro.server.master","version":"latest","metadata":null,"endpoints":[{"name":"Greeter.Hello","request":{"name":"Request","type":"Request","values":[{"name":"name","type":"string","values":null}]},"response":{"name":"Response","type":"Response","values":[{"name":"greeting","type":"string","values":null}]},"metadata":{"endpoint":"Greeter.Hello","handler":"rpc","method":"POST","path":"/greeter/hello"}}],"nodes":[{"id":"go.micro.server.master-3","address":"10.156.157.194:9093","metadata":{"broker":"http","protocol":"grpc","registry":"etcd","server":"grpc","transport":"grpc"}}]}
 
 /micro/registry/go.micro.server.worker/go.micro.server.worker-2
-{"name":"go.micro.server.worker","version":"latest","metadata":null,"endpoints":[{"name":"Greeter.Hello","request":{"name":"Request","type":"Request","values":[{"name":"name","type":"string","values":null}]},"response":{"name":"Response","type":"Response","values":[{"name":"greeting","type":"string","values":null}]},"metadata":{"endpoint":"Greeter.Hello","handler":"rpc","method":"POST","path":"/greeter/hello"}}],"nodes":[{"id":"go.micro.server.worker-2","address":"192.168.50.199:9089","metadata":{"broker":"http","protocol":"grpc","registry":"etcd","server":"grpc","transport":"grpc"}}]}
+{"name":"go.micro.server.worker","version":"latest","metadata":null,"endpoints":[{"name":"Greeter.Hello","request":{"name":"Request","type":"Request","values":[{"name":"name","type":"string","values":null}]},"response":{"name":"Response","type":"Response","values":[{"name":"greeting","type":"string","values":null}]},"metadata":{"endpoint":"Greeter.Hello","handler":"rpc","method":"POST","path":"/greeter/hello"}}],"nodes":[{"id":"go.micro.server.worker-2","address":"10.156.157.194:9089","metadata":{"broker":"http","protocol":"grpc","registry":"etcd","server":"grpc","transport":"grpc"}}]}
 
 /micro/registry/go.micro.server.worker/go.micro.server.worker-3
-{"name":"go.micro.server.worker","version":"latest","metadata":null,"endpoints":[{"name":"Greeter.Hello","request":{"name":"Request","type":"Request","values":[{"name":"name","type":"string","values":null}]},"response":{"name":"Response","type":"Response","values":[{"name":"greeting","type":"string","values":null}]},"metadata":{"endpoint":"Greeter.Hello","handler":"rpc","method":"POST","path":"/greeter/hello"}}],"nodes":[{"id":"go.micro.server.worker-3","address":"192.168.50.199:11003","metadata":{"broker":"http","protocol":"grpc","registry":"etcd","server":"grpc","transport":"grpc"}}]}
+{"name":"go.micro.server.worker","version":"latest","metadata":null,"endpoints":[{"name":"Greeter.Hello","request":{"name":"Request","type":"Request","values":[{"name":"name","type":"string","values":null}]},"response":{"name":"Response","type":"Response","values":[{"name":"greeting","type":"string","values":null}]},"metadata":{"endpoint":"Greeter.Hello","handler":"rpc","method":"POST","path":"/greeter/hello"}}],"nodes":[{"id":"go.micro.server.worker-3","address":"10.156.157.194:11003","metadata":{"broker":"http","protocol":"grpc","registry":"etcd","server":"grpc","transport":"grpc"}}]}
 
 # 任务1
 /resources/douban_book_list
-{"ID":"1621665639791857664","Name":"douban_book_list","AssignedNode":"go.micro.server.worker-2|192.168.50.199:9089","CreationTime":1675470192274320000}
+{"ID":"1621665639791857664","Name":"douban_book_list","AssignedNode":"go.micro.server.worker-2|10.156.157.194:9089","CreationTime":1675470192274320000}
 
 # 任务2
 /resources/election/3f358619bf221967
-master1-192.168.50.199:9091
+master1-10.156.157.194:9091
 
 # master选出来的leader
 /resources/election/3f358619bf221984
-master3-192.168.50.199:9093
+master3-10.156.157.194:9093
 ```

@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crawler-deployment
+  labels:
+    app: crawl-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: crawl-worker
+  template:
+    metadata:
+      labels:
+        app: crawl-worker
+    spec:
+      containers:
+        - name: crawl-worker
+#          imagePullPolicy: IfNotPresent
+          image: crawler:local
+          command:
+            - sh
+            - -c
+            - "./crawler worker --podip=${MY_POD_IP} --config=/app/config/config.toml"
+          ports:
+            - containerPort: 8080
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          volumeMounts:
+            - name: crawler-config
+              mountPath: /app/config/
+      volumes:
+        - name: crawler-config
+          configMap:
+            name: crawler-config

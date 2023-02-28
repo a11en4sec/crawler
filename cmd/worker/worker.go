@@ -2,8 +2,12 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/a11en4sec/crawler/generator"
 
 	"github.com/spf13/cobra"
 
@@ -53,13 +57,16 @@ func init() {
 		&cluster, "cluster", true, "run mode")
 
 	WorkerCmd.Flags().StringVar(
-		&workerID, "id", "1", "set worker id")
+		&workerID, "id", "", "set worker id")
 
 	WorkerCmd.Flags().StringVar(
 		&podIP, "podip", "", "set worker id")
 
 	WorkerCmd.Flags().StringVar(
-		&HTTPListenAddress, "http", ":8080", "set HTTP listen address")
+		&cfgFile, "config", "config.toml", "set config file name")
+
+	WorkerCmd.Flags().StringVar(
+		&HTTPListenAddress, "http", ":8888", "set HTTP listen address")
 
 	WorkerCmd.Flags().StringVar(
 		&GRPCListenAddress, "grpc", ":9090", "set GRPC listen address")
@@ -75,6 +82,7 @@ var HTTPListenAddress string
 var GRPCListenAddress string
 var PProfListenAddress string
 var podIP string
+var cfgFile string
 
 func Run() {
 	// 开启性能监控
@@ -95,7 +103,7 @@ func Run() {
 	enc := toml.NewEncoder()
 	cfg, err := config.NewConfig(config.WithReader(json.NewReader(reader.WithEncoder(enc))))
 	err = cfg.Load(file.NewSource(
-		file.WithPath("config.toml"),
+		file.WithPath(cfgFile),
 		source.WithEncoder(enc),
 	))
 
@@ -152,7 +160,7 @@ func Run() {
 	if err := cfg.Get("GRPCServer").Scan(&sconfig); err != nil {
 		logger.Error("get GRPC Server config failed", zap.Error(err))
 	}
-	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
+	logger.Sugar().Debugf("[+++]grpc worker config,%+v", sconfig)
 
 	s, err := engine.NewEngine(
 		engine.WithFetcher(f),
@@ -165,6 +173,15 @@ func Run() {
 	)
 	if err != nil {
 		panic(err)
+	}
+	// 用于k8s环境中，以pod ip当worker id
+	if workerID == "" {
+		if podIP != "" {
+			ip := generator.GetIDbyIP(podIP)
+			workerID = strconv.Itoa(int(ip))
+		} else {
+			workerID = fmt.Sprintf("%d", time.Now().UnixNano())
+		}
 	}
 
 	id := sconfig.Name + "-" + workerID
@@ -180,8 +197,8 @@ func Run() {
 }
 
 type ServerConfig struct {
-	//GRPCListenAddress string
-	//HTTPListenAddress string
+	GRPCListenAddress string
+	HTTPListenAddress string
 	//ID               string
 	RegistryAddress  string
 	RegisterTTL      int
@@ -197,7 +214,7 @@ func RunGRPCServer(logger *zap.Logger, cfg ServerConfig) {
 		micro.Server(grpc.NewServer(
 			server.Id(workerID),
 		)),
-		micro.Address(GRPCListenAddress),
+		micro.Address(cfg.GRPCListenAddress),
 		micro.Registry(reg), // 将服务注册到etcd中
 		micro.RegisterTTL(time.Duration(cfg.RegisterTTL)*time.Second),
 		micro.RegisterInterval(time.Duration(cfg.RegisterInterval)*time.Second),
@@ -243,8 +260,8 @@ func RunHTTPServer(cfg ServerConfig) {
 	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
 	}
-	zap.S().Debugf("start http server listening on %v proxy to grpc server;%v", HTTPListenAddress, GRPCListenAddress)
-	if err := http.ListenAndServe(HTTPListenAddress, mux); err != nil {
+	zap.S().Debugf("start http server listening on [ %v] proxy to grpc server [%v]", cfg.HTTPListenAddress, cfg.GRPCListenAddress)
+	if err := http.ListenAndServe(cfg.HTTPListenAddress, mux); err != nil {
 		zap.L().Fatal("http listenAndServe failed", zap.Error(err))
 	}
 }

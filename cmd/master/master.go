@@ -61,13 +61,16 @@ var masterID string
 var HTTPListenAddress string
 var GRPCListenAddress string
 var cfgFile string
+var podIP string
 
 func init() {
 	// 给子命令master 设置flag，./main master [--pprof=9981 | --id=1 | --http=8081 | --grpc=9091]
 	MasterCmd.Flags().StringVar(
 		&PProfListenAddress, "pprof", ":9981", "set pprof address")
 	MasterCmd.Flags().StringVar(
-		&cfgFile, "config", "config.toml", "set master id")
+		&cfgFile, "config", "config.toml", "set config file name")
+	MasterCmd.Flags().StringVar(
+		&podIP, "podip", "", "set worker id")
 	MasterCmd.Flags().StringVar(
 		&masterID, "id", "1", "set master id")
 	MasterCmd.Flags().StringVar(
